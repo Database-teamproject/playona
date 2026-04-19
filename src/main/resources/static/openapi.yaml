@@ -1,0 +1,543 @@
+openapi: 3.0.3
+info:
+  title: Playona API
+  description: 크로스 플랫폼 음악 공유 서비스 API
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8080
+    description: 로컬 개발 서버
+  - url: https://api.tunify.io
+    description: 운영 서버
+
+tags:
+  - name: 인증
+    description: OAuth 로그인 및 토큰 관리
+  - name: 유저
+    description: 유저 정보 및 선호 플랫폼
+  - name: 플랫폼
+    description: 지원 플랫폼 목록
+  - name: 트랙
+    description: 곡 정보 조회 및 플랫폼 매칭
+  - name: 공유링크
+    description: 공유 링크 생성 및 리디렉션
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    TokenResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          example: eyJhbGciOiJIUzI1NiJ9...
+        refreshToken:
+          type: string
+          example: eyJhbGciOiJIUzI1NiJ9...
+        expiresIn:
+          type: integer
+          example: 3600
+
+    UserResponse:
+      type: object
+      properties:
+        userUuid:
+          type: string
+          example: 550e8400-e29b-41d4-a716
+        email:
+          type: string
+          example: user@example.com
+        nickname:
+          type: string
+          example: 윤성
+        profileImageUrl:
+          type: string
+          example: https://k.kakaocdn.net/...
+        createdAt:
+          type: string
+          format: date-time
+
+    PlatformResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: Spotify
+        slug:
+          type: string
+          example: spotify
+        logoUrl:
+          type: string
+          example: https://...
+        isActive:
+          type: boolean
+          example: true
+
+    PlatformPreferenceResponse:
+      type: object
+      properties:
+        platformId:
+          type: integer
+          example: 1
+        platformName:
+          type: string
+          example: Spotify
+        priority:
+          type: integer
+          example: 1
+
+    TrackResponse:
+      type: object
+      properties:
+        trackUuid:
+          type: string
+          example: 550e8400-e29b-41d4-a716
+        isrc:
+          type: string
+          example: USUM71703861
+        title:
+          type: string
+          example: Blinding Lights
+        artist:
+          type: string
+          example: The Weeknd
+        album:
+          type: string
+          example: After Hours
+        releaseDate:
+          type: string
+          format: date
+          example: 2019-11-29
+        durationMs:
+          type: integer
+          example: 200040
+        thumbnailUrl:
+          type: string
+          example: https://i.scdn.co/image/...
+        platformTracks:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlatformTrackResponse'
+
+    PlatformTrackResponse:
+      type: object
+      properties:
+        platform:
+          type: string
+          example: spotify
+        url:
+          type: string
+          example: https://open.spotify.com/track/abc123
+        isAvailable:
+          type: boolean
+          example: true
+
+    SharedLinkResponse:
+      type: object
+      properties:
+        linkUuid:
+          type: string
+          example: 550e8400-e29b-41d4-a716
+        shortCode:
+          type: string
+          example: abc123
+        shareUrl:
+          type: string
+          example: https://tunify.io/t/abc123
+        track:
+          $ref: '#/components/schemas/TrackResponse'
+        clickCount:
+          type: integer
+          example: 42
+        createdAt:
+          type: string
+          format: date-time
+
+    ErrorResponse:
+      type: object
+      properties:
+        status:
+          type: integer
+          example: 404
+        message:
+          type: string
+          example: 곡을 찾을 수 없습니다
+        timestamp:
+          type: string
+          format: date-time
+
+paths:
+  # ========== 인증 ==========
+  /api/auth/kakao:
+    post:
+      tags: [인증]
+      summary: 카카오 로그인
+      description: 카카오 OAuth 인가 코드로 JWT 토큰을 발급합니다
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                code:
+                  type: string
+                  description: 카카오 인가 코드
+                  example: abc123xyz
+      responses:
+        '200':
+          description: 로그인 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          description: 인증 실패
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/auth/google:
+    post:
+      tags: [인증]
+      summary: 구글 로그인
+      description: 구글 OAuth 인가 코드로 JWT 토큰을 발급합니다
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                code:
+                  type: string
+                  example: abc123xyz
+      responses:
+        '200':
+          description: 로그인 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          description: 인증 실패
+
+  /api/auth/refresh:
+    post:
+      tags: [인증]
+      summary: 토큰 재발급
+      description: Refresh Token으로 Access Token을 재발급합니다
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken:
+                  type: string
+                  example: eyJhbGci...
+      responses:
+        '200':
+          description: 재발급 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          description: Refresh Token 만료 또는 유효하지 않음
+
+  /api/auth/logout:
+    post:
+      tags: [인증]
+      summary: 로그아웃
+      description: Refresh Token을 만료시킵니다
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        '200':
+          description: 로그아웃 성공
+        '401':
+          description: 인증 필요
+
+  # ========== 유저 ==========
+  /api/users/me:
+    get:
+      tags: [유저]
+      summary: 내 정보 조회
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 조회 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          description: 인증 필요
+
+    put:
+      tags: [유저]
+      summary: 내 정보 수정
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nickname:
+                  type: string
+                  example: 윤성
+                profileImageUrl:
+                  type: string
+                  example: https://...
+      responses:
+        '200':
+          description: 수정 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          description: 인증 필요
+
+  /api/users/me/platforms:
+    get:
+      tags: [유저]
+      summary: 선호 플랫폼 목록 조회
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 조회 성공
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PlatformPreferenceResponse'
+
+    put:
+      tags: [유저]
+      summary: 선호 플랫폼 설정
+      description: 플랫폼 우선순위를 설정합니다 (1순위부터 순서대로)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                properties:
+                  platformId:
+                    type: integer
+                    example: 1
+                  priority:
+                    type: integer
+                    example: 1
+      responses:
+        '200':
+          description: 설정 성공
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PlatformPreferenceResponse'
+
+  # ========== 플랫폼 ==========
+  /api/platforms:
+    get:
+      tags: [플랫폼]
+      summary: 지원 플랫폼 목록 조회
+      description: 현재 활성화된 플랫폼 목록을 반환합니다
+      responses:
+        '200':
+          description: 조회 성공
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PlatformResponse'
+
+  # ========== 트랙 ==========
+  /api/tracks/resolve:
+    get:
+      tags: [트랙]
+      summary: URL로 곡 정보 조회
+      description: 플랫폼 URL을 입력하면 곡 메타데이터와 각 플랫폼 매칭 결과를 반환합니다
+      parameters:
+        - name: url
+          in: query
+          required: true
+          description: 플랫폼 음악 URL
+          schema:
+            type: string
+            example: https://open.spotify.com/track/abc123
+      responses:
+        '200':
+          description: 조회 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrackResponse'
+        '400':
+          description: 지원하지 않는 URL 형식
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 곡을 찾을 수 없음
+
+  /api/tracks/{trackUuid}:
+    get:
+      tags: [트랙]
+      summary: 곡 상세 조회
+      parameters:
+        - name: trackUuid
+          in: path
+          required: true
+          schema:
+            type: string
+            example: 550e8400-e29b-41d4-a716
+      responses:
+        '200':
+          description: 조회 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrackResponse'
+        '404':
+          description: 곡 없음
+
+  # ========== 공유 링크 ==========
+  /api/links:
+    post:
+      tags: [공유링크]
+      summary: 공유 링크 생성
+      description: 플랫폼 URL을 입력하면 Tunify 단축 링크를 생성합니다. 비로그인도 가능합니다
+      security:
+        - bearerAuth: []
+        - {}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url:
+                  type: string
+                  description: 플랫폼 음악 URL
+                  example: https://open.spotify.com/track/abc123
+      responses:
+        '201':
+          description: 링크 생성 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SharedLinkResponse'
+        '400':
+          description: 잘못된 URL 형식
+        '404':
+          description: 곡을 찾을 수 없음
+
+  /api/links/my:
+    get:
+      tags: [공유링크]
+      summary: 내 링크 목록 조회
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 조회 성공
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SharedLinkResponse'
+        '401':
+          description: 인증 필요
+
+  /api/links/{shortCode}:
+    get:
+      tags: [공유링크]
+      summary: 공유 링크 조회
+      parameters:
+        - name: shortCode
+          in: path
+          required: true
+          schema:
+            type: string
+            example: abc123
+      responses:
+        '200':
+          description: 조회 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SharedLinkResponse'
+        '404':
+          description: 링크 없음
+
+  /api/links/{shortCode}/redirect:
+    get:
+      tags: [공유링크]
+      summary: 플랫폼 리디렉션
+      description: |
+        선호 플랫폼으로 리디렉션합니다.
+        - 로그인 유저: 설정된 선호 플랫폼으로 자동 리디렉션
+        - 비로그인: platform 파라미터로 지정하거나 선택 페이지로 이동
+      security:
+        - bearerAuth: []
+        - {}
+      parameters:
+        - name: shortCode
+          in: path
+          required: true
+          schema:
+            type: string
+            example: abc123
+        - name: platform
+          in: query
+          required: false
+          description: 선택한 플랫폼 slug
+          schema:
+            type: string
+            example: spotify
+      responses:
+        '302':
+          description: 플랫폼 URL로 리디렉션
+        '404':
+          description: 링크 없음
+        '410':
+          description: 만료된 링크
