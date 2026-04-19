@@ -6,9 +6,13 @@ spring:
       - org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration
       - org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration
   datasource:
-    url: jdbc:postgresql://43.201.18.26:5432/playona
-    username: postgres
-    password: 0810
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/playona}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:password}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
 # DB 없이 실행 (Swagger 확인용)
 springdoc:
   api-docs:
@@ -22,6 +26,6 @@ springdoc:
   default-produces-media-type: application/json
 
 jwt:
-  secret: playona-secret-key-must-be-at-least-32-characters-long
-  access-expiration: 3600000      # 1시간 (ms)
-  refresh-expiration: 1209600000  # 14일 (ms)
+  secret: ${JWT_SECRET}
+  access-expiration: 3600000
+  refresh-expiration: 1209600000
