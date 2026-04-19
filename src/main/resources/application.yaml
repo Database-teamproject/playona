@@ -17,11 +17,6 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
 
-  autoconfigure:
-    exclude:
-      - org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration
-      - org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration
-
 jwt:
   secret: ${JWT_SECRET:local-dev-secret-key-must-be-at-least-32-chars}
   access-expiration: 3600000
