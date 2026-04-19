@@ -3,7 +3,6 @@ name: Deploy to EC2
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:
 
 jobs:
   deploy:
@@ -11,7 +10,7 @@ jobs:
 
     steps:
       - name: 코드 체크아웃
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
       - name: EC2에 배포
         uses: appleboy/ssh-action@master
