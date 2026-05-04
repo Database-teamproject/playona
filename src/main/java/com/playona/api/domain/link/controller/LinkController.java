@@ -1,5 +1,6 @@
 package com.playona.api.domain.link.controller;
 
+import com.playona.api.domain.link.dto.LinkResponse;
 import com.playona.api.domain.link.entity.SharedLink;
 import com.playona.api.domain.link.service.LinkService;
 import lombok.RequiredArgsConstructor;
@@ -20,24 +21,13 @@ public class LinkController {
     String url = body.get("url");
     SharedLink sharedLink = linkService.createLink(url);
 
-    return ResponseEntity.ok(Map.of(
-        "shortCode", sharedLink.getShortCode(),
-        "trackTitle", sharedLink.getTrack().getTitle(),
-        "trackArtist", sharedLink.getTrack().getArtist(),
-        "thumbnailUrl", sharedLink.getTrack().getThumbnailUrl() != null
-            ? sharedLink.getTrack().getThumbnailUrl() : ""
-    ));
+    return ResponseEntity.ok(new LinkResponse(sharedLink));
   }
   @GetMapping("/{shortCode}")
   public ResponseEntity<?> getLink(@PathVariable String shortCode) {
     SharedLink sharedLink = linkService.getLink(shortCode);
 
-    return ResponseEntity.ok(Map.of(
-        "shortCode", sharedLink.getShortCode(),
-        "trackTitle", sharedLink.getTrack().getTitle(),
-        "trackArtist", sharedLink.getTrack().getArtist(),
-        "clickCount", sharedLink.getClickCount()
-    ));
+    return ResponseEntity.ok(new LinkResponse(sharedLink));
   }
   @GetMapping("/{shortCode}/redirect")
   public ResponseEntity<?> redirect(@PathVariable String shortCode) {
