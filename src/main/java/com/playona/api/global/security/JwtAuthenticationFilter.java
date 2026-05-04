@@ -23,11 +23,21 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
   protected void doFilterInternal(HttpServletRequest request,
       HttpServletResponse response,
       FilterChain filterChain)
-      throws ServletException{
+      throws ServletException {
 
     String requestURI = request.getRequestURI();
 
-    // 화이트리스트 경로는 필터 통과
+    // 토큰이 있으면 항상 처리 (화이트리스트여도)
+    String token = resolveToken(request);
+    if (token != null && jwtProvider.validateToken(token)) {
+      String userUuid = jwtProvider.getUserUuid(token);
+      UsernamePasswordAuthenticationToken authentication =
+          new UsernamePasswordAuthenticationToken(
+              userUuid, null, Collections.emptyList());
+      SecurityContextHolder.getContext().setAuthentication(authentication);
+    }
+
+    // 화이트리스트 경로는 인증 없어도 통과
     if (isWhitelisted(requestURI)) {
       try {
         filterChain.doFilter(request, response);
@@ -35,19 +45,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         throw new RuntimeException(e);
       }
       return;
-    }
-
-    // Authorization 헤더에서 토큰 추출
-    String token = resolveToken(request);
-
-    if (token != null && jwtProvider.validateToken(token)) {
-      String userUuid = jwtProvider.getUserUuid(token);
-
-      UsernamePasswordAuthenticationToken authentication =
-          new UsernamePasswordAuthenticationToken(
-              userUuid, null, Collections.emptyList());
-
-      SecurityContextHolder.getContext().setAuthentication(authentication);
     }
 
     try {
