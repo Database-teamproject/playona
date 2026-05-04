@@ -52,4 +52,15 @@ public class SharedLink {
     this.track = track;
     this.clickCount = 0;
   }
+  
+  public void incrementClickCount() {
+    this.clickCount = (this.clickCount == null ? 0 : this.clickCount) + 1;
+  }
+
+  public SharedLink(String shortCode, Track track, User user) {
+    this.shortCode = shortCode;
+    this.track = track;
+    this.user = user;
+    this.clickCount = 0;
+  }
 }

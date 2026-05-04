@@ -5,7 +5,11 @@ import com.playona.api.domain.link.entity.SharedLinkRepository;
 import com.playona.api.domain.track.entity.Track;
 import com.playona.api.domain.track.entity.TrackRepository;
 import com.playona.api.domain.track.service.YoutubeTrackService;
+import com.playona.api.domain.user.entity.User;
+import com.playona.api.domain.user.entity.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,18 +21,21 @@ public class LinkService {
 
   private final YoutubeTrackService youtubeTrackService;
   private final SharedLinkRepository sharedLinkRepository;
+  private final UserRepository userRepository;
 
   @Transactional
   public SharedLink createLink(String url) {
-
-    // 1. URL에서 플랫폼 식별 (지금은 임시로 제목/아티스트 하드코딩)
     Track track = findOrCreateTrack(url);
-
-    // 2. short_code 생성
     String shortCode = generateShortCode();
 
-    // 3. SharedLink 저장
-    SharedLink sharedLink = new SharedLink(shortCode, track);
+    // 로그인 유저면 user_id 저장
+    User user = null;
+    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+    if (authentication != null && authentication.getPrincipal() instanceof String userUuid) {
+      user = userRepository.findByUserUuid(userUuid).orElse(null);
+    }
+
+    SharedLink sharedLink = new SharedLink(shortCode, track, user);
     return sharedLinkRepository.save(sharedLink);
   }
 
@@ -47,9 +54,13 @@ public class LinkService {
     return sharedLinkRepository.findByShortCode(shortCode)
         .orElseThrow(() -> new RuntimeException("링크를 찾을 수 없습니다: " + shortCode));
   }
+  @Transactional
   public String getRedirectUrl(String shortCode) {
     SharedLink sharedLink = sharedLinkRepository.findByShortCode(shortCode)
         .orElseThrow(() -> new RuntimeException("링크를 찾을 수 없습니다: " + shortCode));
+
+    // click_count 증가
+    sharedLink.incrementClickCount();
 
     return sharedLink.getTrack().getSourceUrl();
   }
