@@ -43,5 +43,8 @@ public class LinkService {
     } while (sharedLinkRepository.existsByShortCode(code));
     return code;
   }
-  
+  public SharedLink getLink(String shortCode) {
+    return sharedLinkRepository.findByShortCode(shortCode)
+        .orElseThrow(() -> new RuntimeException("링크를 찾을 수 없습니다: " + shortCode));
+  }
 }
