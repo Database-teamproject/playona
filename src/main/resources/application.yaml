@@ -3,7 +3,7 @@ spring:
     name: playona
 
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbec:postgresql://localhost:5432/playona}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/playona}
     username: ${SPRING_DATASOURCE_USERNAME:postgres}
     password: ${SPRING_DATASOURCE_PASSWORD:1234}
     driver-class-name: org.postgresql.Driver
@@ -17,6 +17,17 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
 
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${GOOGLE_CLIENT_ID:792849813961-shqc2cnnh2bqvafg5u15jm15bi9h09ou.apps.googleusercontent.com}
+            client-secret: ${GOOGLE_CLIENT_SECRET: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}
+            scope:
+              - email
+              - profile
+
 jwt:
   secret: ${JWT_SECRET:local-dev-secret-key-must-be-at-least-32-chars}
   access-expiration: 3600000
@@ -28,3 +39,6 @@ springdoc:
     url: /openapi.yaml
   api-docs:
     path: /v3/api-docs
+
+youtube:
+  api-key: ${YOUTUBE_API_KEY:AIzaSyCLtQPQD1tibNKyPaWtallyn45Hvib8o2k}

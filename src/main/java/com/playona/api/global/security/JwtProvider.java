@@ -28,14 +28,20 @@ public class JwtProvider {
   }
 
   // Access Token 생성
-  public String generateAccessToken(Long userId) {
+// Access Token 생성 (userId → userUuid로 변경)
+  public String generateToken(String userUuid) {
     return Jwts.builder()
-        .subject(String.valueOf(userId))
+        .subject(userUuid)
         .claim("type", "access")
         .issuedAt(new Date())
         .expiration(new Date(System.currentTimeMillis() + accessExpiration))
         .signWith(getSigningKey())
         .compact();
+  }
+
+  // 토큰에서 userUuid 추출 (기존 getUserId 대체)
+  public String getUserUuid(String token) {
+    return getClaims(token).getSubject();
   }
 
   // Refresh Token 생성
@@ -47,11 +53,6 @@ public class JwtProvider {
         .expiration(new Date(System.currentTimeMillis() + refreshExpiration))
         .signWith(getSigningKey())
         .compact();
-  }
-
-  // 토큰에서 userId 추출
-  public Long getUserId(String token) {
-    return Long.valueOf(getClaims(token).getSubject());
   }
 
   // 토큰 유효성 검증
