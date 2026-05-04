@@ -28,5 +28,15 @@ public class LinkController {
             ? sharedLink.getTrack().getThumbnailUrl() : ""
     ));
   }
+  @GetMapping("/{shortCode}")
+  public ResponseEntity<?> getLink(@PathVariable String shortCode) {
+    SharedLink sharedLink = linkService.getLink(shortCode);
 
+    return ResponseEntity.ok(Map.of(
+        "shortCode", sharedLink.getShortCode(),
+        "trackTitle", sharedLink.getTrack().getTitle(),
+        "trackArtist", sharedLink.getTrack().getArtist(),
+        "clickCount", sharedLink.getClickCount()
+    ));
+  }
 }
