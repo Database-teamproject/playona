@@ -39,4 +39,11 @@ public class LinkController {
         "clickCount", sharedLink.getClickCount()
     ));
   }
+  @GetMapping("/{shortCode}/redirect")
+  public ResponseEntity<?> redirect(@PathVariable String shortCode) {
+    String url = linkService.getRedirectUrl(shortCode);
+    return ResponseEntity.status(302)
+        .header("Location", url)
+        .build();
+  }
 }

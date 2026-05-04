@@ -47,4 +47,10 @@ public class LinkService {
     return sharedLinkRepository.findByShortCode(shortCode)
         .orElseThrow(() -> new RuntimeException("링크를 찾을 수 없습니다: " + shortCode));
   }
+  public String getRedirectUrl(String shortCode) {
+    SharedLink sharedLink = sharedLinkRepository.findByShortCode(shortCode)
+        .orElseThrow(() -> new RuntimeException("링크를 찾을 수 없습니다: " + shortCode));
+
+    return sharedLink.getTrack().getSourceUrl();
+  }
 }
