@@ -40,7 +40,7 @@ public class YoutubeTrackService {
     // 응답에서 곡 정보 추출
     var items = (java.util.List) response.get("items");
     if (items == null || items.isEmpty()) {
-      throw new RuntimeException("YouTube에서 영상을 찾을 수 없습니다: " + videoId);
+      throw new IllegalArgumentException("YouTube에서 영상을 찾을 수 없습니다: " + videoId);
     }
 
     var snippet = (Map) ((Map) items.get(0)).get("snippet");
@@ -54,13 +54,13 @@ public class YoutubeTrackService {
   }
 
   private String extractVideoId(String url) {
-    // https://www.youtube.com/watch?v=VIDEO_ID
-    // https://youtu.be/VIDEO_ID
     if (url.contains("youtu.be/")) {
       return url.split("youtu.be/")[1].split("\\?")[0];
     } else if (url.contains("v=")) {
       return url.split("v=")[1].split("&")[0];
     }
-    throw new RuntimeException("올바른 YouTube URL이 아닙니다: " + url);
+    // extractVideoId 메서드에서
+    throw new IllegalArgumentException("올바른 YouTube URL이 아닙니다: " + url);
+
   }
 }
