@@ -13,7 +13,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class YoutubeTrackService {
 
-  @Value("${youtube.api-key}")
+  @Value("${youtube.api-key:}")
   private String apiKey;
 
   private final TrackRepository trackRepository;

@@ -3,10 +3,10 @@ package com.playona.api.domain.link.service;
 import com.playona.api.domain.link.entity.SharedLink;
 import com.playona.api.domain.link.entity.SharedLinkRepository;
 import com.playona.api.domain.track.entity.Track;
-import com.playona.api.domain.track.entity.TrackRepository;
 import com.playona.api.domain.track.service.YoutubeTrackService;
 import com.playona.api.domain.user.entity.User;
 import com.playona.api.domain.user.entity.UserRepository;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -63,5 +63,10 @@ public class LinkService {
     sharedLink.incrementClickCount();
 
     return sharedLink.getTrack().getSourceUrl();
+  }
+  public List<SharedLink> getMyLinks(String userUuid) {
+    User user = userRepository.findByUserUuid(userUuid)
+        .orElseThrow(() -> new RuntimeException("유저를 찾을 수 없습니다."));
+    return sharedLinkRepository.findByUserOrderByCreatedAtDesc(user);
   }
 }

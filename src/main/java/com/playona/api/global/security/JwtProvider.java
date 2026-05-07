@@ -27,10 +27,9 @@ public class JwtProvider {
     return Keys.hmacShaKeyFor(secretKey.getBytes(StandardCharsets.UTF_8));
   }
 
-  // Access Token 생성
-  public String generateAccessToken(Long userId) {
+  public String generateToken(String userUuid) {
     return Jwts.builder()
-        .subject(String.valueOf(userId))
+        .subject(userUuid)
         .claim("type", "access")
         .issuedAt(new Date())
         .expiration(new Date(System.currentTimeMillis() + accessExpiration))
@@ -38,10 +37,9 @@ public class JwtProvider {
         .compact();
   }
 
-  // Refresh Token 생성
-  public String generateRefreshToken(Long userId) {
+  public String generateRefreshToken(String userUuid) {
     return Jwts.builder()
-        .subject(String.valueOf(userId))
+        .subject(userUuid)
         .claim("type", "refresh")
         .issuedAt(new Date())
         .expiration(new Date(System.currentTimeMillis() + refreshExpiration))
@@ -49,9 +47,8 @@ public class JwtProvider {
         .compact();
   }
 
-  // 토큰에서 userId 추출
-  public Long getUserId(String token) {
-    return Long.valueOf(getClaims(token).getSubject());
+  public String getUserUuid(String token) {
+    return getClaims(token).getSubject();
   }
 
   // 토큰 유효성 검증
