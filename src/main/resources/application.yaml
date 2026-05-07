@@ -54,5 +54,8 @@ springdoc:
   api-docs:
     path: /v3/api-docs
 
+oauth2:
+  redirect-url: ${OAUTH2_REDIRECT_URL:http://localhost:3000}
+
 youtube:
   api-key: ${YOUTUBE_API_KEY}

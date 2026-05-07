@@ -8,6 +8,7 @@ import com.playona.api.domain.user.entity.UserRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationSuccessHandler;
@@ -19,6 +20,9 @@ import java.util.UUID;
 @Component
 @RequiredArgsConstructor
 public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler {
+
+  @Value("${oauth2.redirect-url}")
+  private String redirectUrl;
 
   private final JwtProvider jwtProvider;
   private final UserRepository userRepository;
@@ -65,8 +69,7 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
         LocalDateTime.now().plusSeconds(jwtProvider.getRefreshExpiration() / 1000)
     ));
 
-    String redirectUrl = "http://localhost:3000/auth/callback?token=" + accessToken
-        + "&refresh=" + refreshToken;
-    getRedirectStrategy().sendRedirect(request, response, redirectUrl);
+    String targetUrl = redirectUrl + "?token=" + accessToken + "&refresh=" + refreshToken;
+    getRedirectStrategy().sendRedirect(request, response, targetUrl);
   }
 }
