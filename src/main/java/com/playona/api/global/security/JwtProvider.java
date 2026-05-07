@@ -45,14 +45,17 @@ public class JwtProvider {
   }
 
   // Refresh Token 생성
-  public String generateRefreshToken(Long userId) {
+  public String generateRefreshToken(String userUuid) {
     return Jwts.builder()
-        .subject(String.valueOf(userId))
+        .subject(userUuid)
         .claim("type", "refresh")
         .issuedAt(new Date())
         .expiration(new Date(System.currentTimeMillis() + refreshExpiration))
         .signWith(getSigningKey())
         .compact();
+  }
+  public long getRefreshExpiration() {
+    return refreshExpiration;
   }
 
   // 토큰 유효성 검증
