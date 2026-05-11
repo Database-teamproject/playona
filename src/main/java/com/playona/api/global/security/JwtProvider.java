@@ -27,6 +27,8 @@ public class JwtProvider {
     return Keys.hmacShaKeyFor(secretKey.getBytes(StandardCharsets.UTF_8));
   }
 
+  // Access Token 생성
+// Access Token 생성 (userId → userUuid로 변경)
   public String generateToken(String userUuid) {
     return Jwts.builder()
         .subject(userUuid)
@@ -37,6 +39,12 @@ public class JwtProvider {
         .compact();
   }
 
+  // 토큰에서 userUuid 추출 (기존 getUserId 대체)
+  public String getUserUuid(String token) {
+    return getClaims(token).getSubject();
+  }
+
+  // Refresh Token 생성
   public String generateRefreshToken(String userUuid) {
     return Jwts.builder()
         .subject(userUuid)
@@ -46,9 +54,8 @@ public class JwtProvider {
         .signWith(getSigningKey())
         .compact();
   }
-
-  public String getUserUuid(String token) {
-    return getClaims(token).getSubject();
+  public long getRefreshExpiration() {
+    return refreshExpiration;
   }
 
   // 토큰 유효성 검증
