@@ -5,6 +5,7 @@ import com.playona.api.domain.link.entity.SharedLinkRepository;
 import com.playona.api.domain.track.entity.Track;
 import com.playona.api.domain.track.entity.TrackRepository;
 import com.playona.api.domain.track.service.SpotifyTrackService;
+import com.playona.api.domain.track.service.TrackMatchingService;
 import com.playona.api.domain.track.service.YoutubeTrackService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -19,19 +20,19 @@ public class LinkService {
   private final YoutubeTrackService youtubeTrackService;
   private final SpotifyTrackService spotifyTrackService;
   private final SharedLinkRepository sharedLinkRepository;
+  private final TrackMatchingService trackMatchingService;
 
   @Transactional
   public SharedLink createLink(String url) {
-
-    // 1. URL에서 플랫폼 식별 (지금은 임시로 제목/아티스트 하드코딩)
     Track track = findOrCreateTrack(url);
-
-    // 2. short_code 생성
     String shortCode = generateShortCode();
-
-    // 3. SharedLink 저장
     SharedLink sharedLink = new SharedLink(shortCode, track);
-    return sharedLinkRepository.save(sharedLink);
+    sharedLinkRepository.save(sharedLink);
+
+    // 모든 플랫폼 매칭 (비동기적으로 처리)
+    trackMatchingService.matchAll(track); 
+
+    return sharedLink;
   }
 
   private Track findOrCreateTrack(String url) {

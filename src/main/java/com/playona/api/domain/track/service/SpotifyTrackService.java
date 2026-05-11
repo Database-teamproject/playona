@@ -1,5 +1,7 @@
 package com.playona.api.domain.track.service;
 
+import com.playona.api.domain.platform.entity.Platform;
+import com.playona.api.domain.platform.entity.PlatformTrack;
 import com.playona.api.domain.track.entity.Track;
 import com.playona.api.domain.track.entity.TrackRepository;
 import lombok.RequiredArgsConstructor;
@@ -68,5 +70,39 @@ public class SpotifyTrackService {
       return url.split("spotify.com/track/")[1].split("\\?")[0];
     }
     throw new IllegalArgumentException("올바른 Spotify URL이 아닙니다: " + url);
+  }
+
+  public PlatformTrack searchTrack(Track track, Platform platform) {
+    SpotifyApi spotifyApi = new SpotifyApi.Builder()
+        .setClientId(clientId)
+        .setClientSecret(clientSecret)
+        .build();
+
+    try {
+      ClientCredentialsRequest credentialsRequest = spotifyApi.clientCredentials().build();
+      ClientCredentials credentials = credentialsRequest.execute();
+      spotifyApi.setAccessToken(credentials.getAccessToken());
+
+      // ISRC로 검색 (있으면 우선)
+      String query;
+      if (track.getIsrc() != null) {
+        query = "isrc:" + track.getIsrc();
+      } else {
+        query = "track:" + track.getTitle() + " artist:" + track.getArtist();
+      }
+
+      var results = spotifyApi.searchTracks(query).build().execute();
+      if (results.getItems().length == 0) return null;
+
+      var item = results.getItems()[0];
+      String trackId = item.getId();
+      String url = "https://open.spotify.com/track/" + trackId;
+
+      return new PlatformTrack(track, platform, trackId, url, item.getName(),
+          Arrays.stream(item.getArtists()).map(ArtistSimplified::getName).collect(Collectors.joining(", ")));
+
+    } catch (Exception e) {
+      throw new RuntimeException("Spotify 검색 실패: " + e.getMessage());
+    }
   }
 }

@@ -13,6 +13,16 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 public class PlatformTrack {
 
+  public PlatformTrack(Track track, Platform platform, String platformTrackId, String url, String title, String artist) {
+    this.track = track;
+    this.platform = platform;
+    this.platformTrackId = platformTrackId;
+    this.url = url;
+    this.title = title;
+    this.artist = artist;
+    this.fetchedAt = LocalDateTime.now();
+  }
+
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;

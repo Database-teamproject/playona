@@ -1,5 +1,7 @@
 package com.playona.api.domain.track.service;
 
+import com.playona.api.domain.platform.entity.Platform;
+import com.playona.api.domain.platform.entity.PlatformTrack;
 import com.playona.api.domain.track.entity.Track;
 import com.playona.api.domain.track.entity.TrackRepository;
 import lombok.RequiredArgsConstructor;
@@ -62,5 +64,39 @@ public class YoutubeTrackService {
       return url.split("v=")[1].split("&")[0];
     }
     throw new RuntimeException("올바른 YouTube URL이 아닙니다: " + url);
+  }
+
+  public PlatformTrack searchTrack(Track track, Platform platform) {
+    String query;
+    if (track.getIsrc() != null) {
+      query = track.getTitle() + " " + track.getArtist();
+    } else {
+      query = track.getTitle() + " " + track.getArtist();
+    }
+
+    Map response = webClient.get()
+        .uri(uriBuilder -> uriBuilder
+            .path("/youtube/v3/search")
+            .queryParam("part", "snippet")
+            .queryParam("q", query)
+            .queryParam("type", "video")
+            .queryParam("videoCategoryId", "10")
+            .queryParam("maxResults", "1")
+            .queryParam("key", apiKey)
+            .build())
+        .retrieve()
+        .bodyToMono(Map.class)
+        .block();
+
+    var items = (java.util.List) response.get("items");
+    if (items == null || items.isEmpty()) return null;
+
+    var snippet = (Map) ((Map) items.get(0)).get("snippet");
+    var videoId = (String) ((Map) ((Map) items.get(0)).get("id")).get("videoId");
+    String url = "https://music.youtube.com/watch?v=" + videoId;
+    String title = (String) snippet.get("title");
+    String artist = (String) snippet.get("channelTitle");
+
+    return new PlatformTrack(track, platform, videoId, url, title, artist);
   }
 }
