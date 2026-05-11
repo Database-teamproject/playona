@@ -4,7 +4,7 @@ import com.playona.api.domain.auth.entity.RefreshTokenRepository;
 import com.playona.api.domain.user.entity.User;
 import com.playona.api.domain.auth.entity.RefreshToken;
 import java.time.LocalDateTime;
-import com.playona.api.domain.user.entity.UserRepository;
+import com.playona.api.domain.user.repository.UserRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;

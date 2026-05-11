@@ -8,7 +8,8 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface PlatformRepository extends JpaRepository<Platform, Long> {
+public interface PlatformRepository extends JpaRepository<Platform, Integer> {
     Optional<Platform> findBySlug(String slug);
+    List<Platform> findByIsActiveTrue();
     List<Platform> findByIsActiveTrueOrderByIdAsc();
 }

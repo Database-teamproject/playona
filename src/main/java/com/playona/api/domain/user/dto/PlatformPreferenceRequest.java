@@ -6,6 +6,6 @@ import lombok.Setter;
 @Getter
 @Setter
 public class PlatformPreferenceRequest {
-    private Long platformId;
+    private Integer platformId;
     private Integer priority;
 }

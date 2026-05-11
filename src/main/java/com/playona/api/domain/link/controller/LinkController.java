@@ -46,4 +46,9 @@ public class LinkController {
         .header("Location", url)
         .build();
   }
+
+  @GetMapping("/{shortCode}/platforms")
+  public ResponseEntity<?> getPlatformUrls(@PathVariable String shortCode) {
+    return ResponseEntity.ok(linkService.getPlatformUrls(shortCode));
+  }
 }

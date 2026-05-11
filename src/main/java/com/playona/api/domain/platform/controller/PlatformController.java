@@ -1,7 +1,7 @@
 package com.playona.api.domain.platform.controller;
 
 import com.playona.api.domain.platform.entity.Platform;
-import com.playona.api.domain.platform.entity.PlatformRepository;
+import com.playona.api.domain.platform.repository.PlatformRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;

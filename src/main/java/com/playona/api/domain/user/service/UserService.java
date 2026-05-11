@@ -64,13 +64,13 @@ public class UserService {
         User user = getUserOrThrow(userId);
 
         return preferenceRepository.findByUserOrderByPriorityAsc(user)
-                .stream()
-                .map(pref -> PlatformPreferenceResponse.builder()
-                        .platformId(pref.getPlatform().getId())
-                        .platformName(pref.getPlatform().getName())
-                        .priority(pref.getPriority())
-                        .build())
-                .toList();
+            .stream()
+            .map(pref -> (PlatformPreferenceResponse) PlatformPreferenceResponse.builder()
+                .platformId(pref.getPlatform().getId())
+                .platformName(pref.getPlatform().getName())
+                .priority(pref.getPriority())
+                .build())
+            .toList();
     }
 
     public List<PlatformPreferenceResponse> updateMyPlatforms(Long userId, List<PlatformPreferenceRequest> requests) {

@@ -2,8 +2,8 @@ package com.playona.api.domain.track.service;
 
 import com.playona.api.domain.platform.entity.Platform;
 import com.playona.api.domain.platform.entity.PlatformTrack;
-import com.playona.api.domain.platform.entity.PlatformTrackRepository;
-import com.playona.api.domain.platform.entity.PlatformRepository;
+import com.playona.api.domain.platform.repository.PlatformRepository;
+import com.playona.api.domain.platform.repository.PlatformTrackRepository;
 import com.playona.api.domain.track.entity.Track;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

@@ -13,6 +13,13 @@ import java.time.LocalDateTime;
 @Builder
 public class User {
 
+    public User(String userUuid, String email, String nickname, String profileImageUrl) {
+        this.userUuid = userUuid;
+        this.email = email;
+        this.nickname = nickname;
+        this.profileImageUrl = profileImageUrl;
+    }
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
