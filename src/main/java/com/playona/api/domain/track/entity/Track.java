@@ -12,6 +12,14 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 public class Track {
 
+  public Track(String title, String artist, String thumbnailUrl, String sourceUrl, String isrc) {
+    this.title = title;
+    this.artist = artist;
+    this.thumbnailUrl = thumbnailUrl;
+    this.sourceUrl = sourceUrl;
+    this.isrc = isrc;
+  }
+
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;

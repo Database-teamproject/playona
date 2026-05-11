@@ -1,4 +1,8 @@
 spring:
+
+  sql:
+    init:
+      mode: always
   application:
     name: playona
 
@@ -59,3 +63,8 @@ oauth2:
 
 youtube:
   api-key: ${YOUTUBE_API_KEY}
+
+spotify:
+  client-id: ${SPOTIFY_CLIENT_ID}
+  client-secret: ${SPOTIFY_CLIENT_SECRET}
+

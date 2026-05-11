@@ -4,6 +4,7 @@ import com.playona.api.domain.link.entity.SharedLink;
 import com.playona.api.domain.link.entity.SharedLinkRepository;
 import com.playona.api.domain.track.entity.Track;
 import com.playona.api.domain.track.entity.TrackRepository;
+import com.playona.api.domain.track.service.SpotifyTrackService;
 import com.playona.api.domain.track.service.YoutubeTrackService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -16,6 +17,7 @@ import java.util.UUID;
 public class LinkService {
 
   private final YoutubeTrackService youtubeTrackService;
+  private final SpotifyTrackService spotifyTrackService;
   private final SharedLinkRepository sharedLinkRepository;
 
   @Transactional
@@ -33,7 +35,12 @@ public class LinkService {
   }
 
   private Track findOrCreateTrack(String url) {
-    return youtubeTrackService.getTrackFromUrl(url);
+    if (url.contains("spotify.com")) {
+      return spotifyTrackService.getTrackFromUrl(url);
+    } else if (url.contains("youtube.com") || url.contains("youtu.be") || url.contains("music.youtube.com")) {
+      return youtubeTrackService.getTrackFromUrl(url);
+    }
+    throw new IllegalArgumentException("지원하지 않는 플랫폼 URL입니다: " + url);
   }
 
   private String generateShortCode() {
