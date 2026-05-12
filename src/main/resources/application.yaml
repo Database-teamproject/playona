@@ -2,7 +2,7 @@ spring:
 
   sql:
     init:
-      mode: always
+      mode: never
   application:
     name: playona
 

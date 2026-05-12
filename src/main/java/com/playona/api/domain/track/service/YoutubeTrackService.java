@@ -23,7 +23,10 @@ public class YoutubeTrackService {
 
   public Track getTrackFromUrl(String url) {
     String videoId = extractVideoId(url);
-
+// source_url로 기존 트랙 조회
+    String sourceUrl = "https://music.youtube.com/watch?v=" + videoId;
+    Track existing = trackRepository.findBySourceUrl(sourceUrl);
+    if (existing != null) return existing;
     // 이미 DB에 있으면 그냥 반환 (중복 저장 방지)
     // 나중에 platform_track_id로 체크하도록 개선 예정
 
