@@ -26,54 +26,13 @@ public class UserService {
     private final PlatformRepository platformRepository;
     private final UserPlatformPreferenceRepository preferenceRepository;
 
-    // ── UUID 기반 (JWT) ──────────────────────────────────────────
-
     @Transactional(readOnly = true)
-    public UserResponse getMyInfoByUuid(String userUuid) {
-        User user = getUserByUuidOrThrow(userUuid);
-        return toUserResponse(user);
-    }
-
-    public UserResponse updateMyInfoByUuid(String userUuid, UpdateUserRequest request) {
-        User user = getUserByUuidOrThrow(userUuid);
-        if (request.getNickname() != null && !request.getNickname().isBlank()) {
-            user.setNickname(request.getNickname());
-        }
-        if (request.getProfileImageUrl() != null) {
-            user.setProfileImageUrl(request.getProfileImageUrl());
-        }
-        return toUserResponse(user);
-    }
-
-    @Transactional(readOnly = true)
-    public List<PlatformPreferenceResponse> getMyPlatformsByUuid(String userUuid) {
-        User user = getUserByUuidOrThrow(userUuid);
-        return toPlatformPreferenceResponses(user);
-    }
-
-    public List<PlatformPreferenceResponse> updateMyPlatformsByUuid(String userUuid, List<PlatformPreferenceRequest> requests) {
-        User user = getUserByUuidOrThrow(userUuid);
-        return updatePlatforms(user, requests);
-    }
-
-    // ── ID 기반 (레거시) ─────────────────────────────────────────
-
-    @Transactional(readOnly = true)
-<<<<<<< Updated upstream
-    public UserResponse getMyInfo(Long userId) {
-        return toUserResponse(getUserOrThrow(userId));
-    }
-
-    public UserResponse updateMyInfo(Long userId, UpdateUserRequest request) {
-        User user = getUserOrThrow(userId);
-=======
     public UserResponse getMyInfoByUuid(String userUuid) {
         return toUserResponse(getUserByUuidOrThrow(userUuid));
     }
 
     public UserResponse updateMyInfoByUuid(String userUuid, UpdateUserRequest request) {
         User user = getUserByUuidOrThrow(userUuid);
->>>>>>> Stashed changes
         if (request.getNickname() != null && !request.getNickname().isBlank()) {
             user.setNickname(request.getNickname());
         }
@@ -84,18 +43,6 @@ public class UserService {
     }
 
     @Transactional(readOnly = true)
-<<<<<<< Updated upstream
-    public List<PlatformPreferenceResponse> getMyPlatforms(Long userId) {
-        return toPlatformPreferenceResponses(getUserOrThrow(userId));
-    }
-
-    public List<PlatformPreferenceResponse> updateMyPlatforms(Long userId, List<PlatformPreferenceRequest> requests) {
-        return updatePlatforms(getUserOrThrow(userId), requests);
-    }
-
-    // ── 공통 헬퍼 ───────────────────────────────────────────────
-
-=======
     public List<PlatformPreferenceResponse> getMyPlatformsByUuid(String userUuid) {
         return toPlatformPreferenceResponses(getUserByUuidOrThrow(userUuid));
     }
@@ -104,28 +51,24 @@ public class UserService {
         return updatePlatforms(getUserByUuidOrThrow(userUuid), requests);
     }
 
->>>>>>> Stashed changes
     private List<PlatformPreferenceResponse> updatePlatforms(User user, List<PlatformPreferenceRequest> requests) {
         if (requests == null || requests.isEmpty()) {
             throw new IllegalArgumentException("Platform preference list cannot be empty");
         }
 
-        List<PlatformPreferenceRequest> sortedRequests = requests.stream()
-            .sorted(Comparator.comparingInt(PlatformPreferenceRequest::getPriority))
-            .toList();
-
         preferenceRepository.deleteByUser(user);
 
-        for (PlatformPreferenceRequest request : sortedRequests) {
-            Platform platform = platformRepository.findById(request.getPlatformId())
-                .orElseThrow(() -> new IllegalArgumentException("Platform not found: " + request.getPlatformId()));
-
-            preferenceRepository.save(UserPlatformPreference.builder()
-                .user(user)
-                .platform(platform)
-                .priority(request.getPriority())
-                .build());
-        }
+        requests.stream()
+            .sorted(Comparator.comparingInt(PlatformPreferenceRequest::getPriority))
+            .forEach(request -> {
+                Platform platform = platformRepository.findById(request.getPlatformId())
+                    .orElseThrow(() -> new IllegalArgumentException("Platform not found: " + request.getPlatformId()));
+                preferenceRepository.save(UserPlatformPreference.builder()
+                    .user(user)
+                    .platform(platform)
+                    .priority(request.getPriority())
+                    .build());
+            });
 
         return toPlatformPreferenceResponses(user);
     }
@@ -149,23 +92,10 @@ public class UserService {
             .profileImageUrl(user.getProfileImageUrl())
             .createdAt(user.getCreatedAt())
             .build();
-<<<<<<< Updated upstream
     }
 
     private User getUserByUuidOrThrow(String userUuid) {
         return userRepository.findByUserUuid(userUuid)
             .orElseThrow(() -> new IllegalArgumentException("User not found: " + userUuid));
-    }
-
-    private User getUserOrThrow(Long userId) {
-        return userRepository.findById(userId)
-            .orElseThrow(() -> new IllegalArgumentException("User not found: " + userId));
-=======
-    }
-
-    private User getUserByUuidOrThrow(String userUuid) {
-        return userRepository.findByUserUuid(userUuid)
-            .orElseThrow(() -> new IllegalArgumentException("User not found: " + userUuid));
->>>>>>> Stashed changes
     }
 }
