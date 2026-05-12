@@ -3,6 +3,8 @@ package com.playona.api.domain.link.controller;
 import com.playona.api.domain.link.dto.LinkResponse;
 import com.playona.api.domain.link.entity.SharedLink;
 import com.playona.api.domain.link.service.LinkService;
+import com.playona.api.domain.platform.entity.PlatformTrack;
+import com.playona.api.domain.platform.repository.PlatformTrackRepository;
 import com.playona.api.global.common.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -21,6 +23,7 @@ public class LinkController {
   @Value("${app.base-url}")
   private String baseUrl;
   private final LinkService linkService;
+  private final PlatformTrackRepository platformTrackRepository;
 
   @PostMapping
   public ResponseEntity<ApiResponse<LinkResponse>> createLink(@RequestBody Map<String, String> body) {
@@ -36,7 +39,8 @@ public class LinkController {
   @GetMapping("/{shortCode}")
   public ResponseEntity<ApiResponse<?>> getLink(@PathVariable String shortCode) {
     SharedLink sharedLink = linkService.getLink(shortCode);
-    return ResponseEntity.ok(ApiResponse.ok(new LinkResponse(sharedLink, baseUrl)));
+    List<PlatformTrack> platformTracks = platformTrackRepository.findByTrack(sharedLink.getTrack());
+    return ResponseEntity.ok(ApiResponse.ok(new LinkResponse(sharedLink, baseUrl, platformTracks)));
   }
 
   @GetMapping("/{shortCode}/platforms")

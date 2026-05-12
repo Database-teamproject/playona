@@ -52,4 +52,7 @@ public class SharedLink {
     this.track = track;
     this.clickCount = 0;
   }
+  public void incrementClickCount() {
+    this.clickCount = (this.clickCount == null ? 0 : this.clickCount) + 1;
+  }
 }

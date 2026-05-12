@@ -41,7 +41,7 @@ public class LinkService {
     // 모든 플랫폼 매칭 (비동기적으로 처리)
     trackMatchingService.matchAll(track);
 
-    return new LinkResponse(sharedLink, baseUrl);
+    return new LinkResponse(sharedLink, baseUrl, platformTrackRepository.findByTrack(sharedLink.getTrack()));
   }
 
   private Track findOrCreateTrack(String url) {
@@ -69,6 +69,8 @@ public class LinkService {
   public String getRedirectUrl(String shortCode, String userUuid) {
     SharedLink sharedLink = sharedLinkRepository.findByShortCode(shortCode)
         .orElseThrow(() -> new RuntimeException("링크를 찾을 수 없습니다: " + shortCode));
+    sharedLink.incrementClickCount();
+    sharedLinkRepository.save(sharedLink);
 
     return sharedLink.getTrack().getSourceUrl();
   }
@@ -90,7 +92,7 @@ public class LinkService {
     return userRepository.findByUserUuid(userUuid)
         .map(user -> sharedLinkRepository.findByUserOrderByCreatedAtDesc(user)
             .stream()
-            .map(link -> new LinkResponse(link, baseUrl))
+            .map(link -> new LinkResponse(link, baseUrl, platformTrackRepository.findByTrack(link.getTrack())))
             .toList())
         .orElse(List.of());
   }

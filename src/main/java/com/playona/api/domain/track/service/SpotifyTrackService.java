@@ -56,6 +56,10 @@ public class SpotifyTrackService {
       String isrc = spotifyTrack.getExternalIds().getExternalIds().get("isrc");
       String sourceUrl = "https://open.spotify.com/track/" + trackId;
 
+      if (isrc != null && trackRepository.existsByIsrc(isrc)) {
+        return trackRepository.findFirstByIsrc(isrc).orElseThrow();
+      }
+
       Track track = new Track(title, artist, thumbnail, sourceUrl, isrc);
       return trackRepository.save(track);
 
