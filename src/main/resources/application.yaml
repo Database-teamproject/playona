@@ -68,3 +68,5 @@ spotify:
   client-id: ${SPOTIFY_CLIENT_ID}
   client-secret: ${SPOTIFY_CLIENT_SECRET}
 
+app:
+  base-url: ${APP_BASE_URL:http://localhost:8080}

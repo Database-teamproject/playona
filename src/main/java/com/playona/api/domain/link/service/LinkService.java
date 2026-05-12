@@ -1,5 +1,6 @@
 package com.playona.api.domain.link.service;
 
+import com.playona.api.domain.link.dto.LinkResponse;
 import com.playona.api.domain.link.entity.SharedLink;
 import com.playona.api.domain.link.entity.SharedLinkRepository;
 import com.playona.api.domain.platform.repository.PlatformTrackRepository;
@@ -7,9 +8,9 @@ import com.playona.api.domain.track.entity.Track;
 import com.playona.api.domain.track.service.SpotifyTrackService;
 import com.playona.api.domain.track.service.TrackMatchingService;
 import com.playona.api.domain.track.service.YoutubeTrackService;
-import com.playona.api.domain.user.repository.UserPlatformPreferenceRepository;
-import com.playona.api.domain.user.repository.UserRepository;
+import org.springframework.beans.factory.annotation.Value;
 import java.util.List;
+import com.playona.api.domain.user.repository.UserRepository;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -21,25 +22,26 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class LinkService {
 
+  @Value("${app.base-url}")
+  private String baseUrl;
+  private final UserRepository userRepository;
   private final YoutubeTrackService youtubeTrackService;
   private final SpotifyTrackService spotifyTrackService;
   private final SharedLinkRepository sharedLinkRepository;
   private final TrackMatchingService trackMatchingService;
-  private final UserRepository userRepository;
-  private final UserPlatformPreferenceRepository userPlatformPreferenceRepository;
   private final PlatformTrackRepository platformTrackRepository;
 
   @Transactional
-  public SharedLink createLink(String url) {
+  public LinkResponse createLink(String url) {
     Track track = findOrCreateTrack(url);
     String shortCode = generateShortCode();
     SharedLink sharedLink = new SharedLink(shortCode, track);
     sharedLinkRepository.save(sharedLink);
 
     // 모든 플랫폼 매칭 (비동기적으로 처리)
-    trackMatchingService.matchAll(track); 
+    trackMatchingService.matchAll(track);
 
-    return sharedLink;
+    return new LinkResponse(sharedLink, baseUrl);
   }
 
   private Track findOrCreateTrack(String url) {
@@ -64,7 +66,7 @@ public class LinkService {
         .orElseThrow(() -> new RuntimeException("링크를 찾을 수 없습니다: " + shortCode));
   }
 
-  public String getRedirectUrl(String shortCode) {
+  public String getRedirectUrl(String shortCode, String userUuid) {
     SharedLink sharedLink = sharedLinkRepository.findByShortCode(shortCode)
         .orElseThrow(() -> new RuntimeException("링크를 찾을 수 없습니다: " + shortCode));
 
@@ -82,5 +84,14 @@ public class LinkService {
             "url", pt.getUrl()
         ))
         .toList();
+  }
+
+  public List<LinkResponse> getMyLinks(String userUuid) {
+    return userRepository.findByUserUuid(userUuid)
+        .map(user -> sharedLinkRepository.findByUserOrderByCreatedAtDesc(user)
+            .stream()
+            .map(link -> new LinkResponse(link, baseUrl))
+            .toList())
+        .orElse(List.of());
   }
 }

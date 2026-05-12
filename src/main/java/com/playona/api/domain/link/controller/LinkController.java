@@ -1,11 +1,16 @@
 package com.playona.api.domain.link.controller;
 
+import com.playona.api.domain.link.dto.LinkResponse;
 import com.playona.api.domain.link.entity.SharedLink;
 import com.playona.api.domain.link.service.LinkService;
+import com.playona.api.global.common.ApiResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -13,42 +18,39 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class LinkController {
 
+  @Value("${app.base-url}")
+  private String baseUrl;
   private final LinkService linkService;
 
   @PostMapping
-  public ResponseEntity<?> createLink(@RequestBody Map<String, String> body) {
+  public ResponseEntity<ApiResponse<LinkResponse>> createLink(@RequestBody Map<String, String> body) {
     String url = body.get("url");
-    SharedLink sharedLink = linkService.createLink(url);
-
-    return ResponseEntity.ok(Map.of(
-        "shortCode", sharedLink.getShortCode(),
-        "trackTitle", sharedLink.getTrack().getTitle(),
-        "trackArtist", sharedLink.getTrack().getArtist(),
-        "thumbnailUrl", sharedLink.getTrack().getThumbnailUrl() != null
-            ? sharedLink.getTrack().getThumbnailUrl() : ""
-    ));
+    return ResponseEntity.ok(ApiResponse.ok(linkService.createLink(url)));
   }
-  @GetMapping("/{shortCode}")
-  public ResponseEntity<?> getLink(@PathVariable String shortCode) {
-    SharedLink sharedLink = linkService.getLink(shortCode);
 
-    return ResponseEntity.ok(Map.of(
-        "shortCode", sharedLink.getShortCode(),
-        "trackTitle", sharedLink.getTrack().getTitle(),
-        "trackArtist", sharedLink.getTrack().getArtist(),
-        "clickCount", sharedLink.getClickCount()
-    ));
+  @GetMapping("/my")
+  public ResponseEntity<ApiResponse<?>> getMyLinks(@AuthenticationPrincipal String userUuid) {
+    return ResponseEntity.ok(ApiResponse.ok(linkService.getMyLinks(userUuid)));
+  }
+
+  @GetMapping("/{shortCode}")
+  public ResponseEntity<ApiResponse<?>> getLink(@PathVariable String shortCode) {
+    SharedLink sharedLink = linkService.getLink(shortCode);
+    return ResponseEntity.ok(ApiResponse.ok(new LinkResponse(sharedLink, baseUrl)));
+  }
+
+  @GetMapping("/{shortCode}/platforms")
+  public ResponseEntity<ApiResponse<?>> getPlatformUrls(@PathVariable String shortCode) {
+    return ResponseEntity.ok(ApiResponse.ok(linkService.getPlatformUrls(shortCode)));
   }
   @GetMapping("/{shortCode}/redirect")
-  public ResponseEntity<?> redirect(@PathVariable String shortCode) {
-    String url = linkService.getRedirectUrl(shortCode);
+  public ResponseEntity<?> redirect(@PathVariable String shortCode,
+      @AuthenticationPrincipal String userUuid) {
+    String url = linkService  .getRedirectUrl(shortCode, userUuid);
     return ResponseEntity.status(302)
         .header("Location", url)
         .build();
   }
 
-  @GetMapping("/{shortCode}/platforms")
-  public ResponseEntity<?> getPlatformUrls(@PathVariable String shortCode) {
-    return ResponseEntity.ok(linkService.getPlatformUrls(shortCode));
-  }
+
 }

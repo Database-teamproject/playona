@@ -2,6 +2,7 @@ package com.playona.api.domain.platform.controller;
 
 import com.playona.api.domain.platform.entity.Platform;
 import com.playona.api.domain.platform.repository.PlatformRepository;
+import com.playona.api.global.common.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -17,7 +18,7 @@ public class PlatformController {
   private final PlatformRepository platformRepository;
 
   @GetMapping
-  public ResponseEntity<List<Platform>> getPlatforms() {
-    return ResponseEntity.ok(platformRepository.findByIsActiveTrue());
+  public ResponseEntity<ApiResponse<?>> getPlatforms() {
+    return ResponseEntity.ok(ApiResponse.ok(platformRepository.findByIsActiveTrue()));
   }
 }
