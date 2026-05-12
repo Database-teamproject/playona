@@ -2,12 +2,23 @@ package com.playona.api.domain.link.service;
 
 import com.playona.api.domain.link.entity.SharedLink;
 import com.playona.api.domain.link.entity.SharedLinkRepository;
+<<<<<<< Updated upstream
+=======
+import com.playona.api.domain.platform.entity.PlatformTrack;
+import com.playona.api.domain.platform.repository.PlatformTrackRepository;
+>>>>>>> Stashed changes
 import com.playona.api.domain.track.entity.Track;
 import com.playona.api.domain.track.service.YoutubeTrackService;
+<<<<<<< Updated upstream
 <<<<<<< Updated upstream
 import com.playona.api.domain.user.entity.User;
 import com.playona.api.domain.user.entity.UserRepository;
 =======
+=======
+import com.playona.api.domain.user.entity.User;
+import com.playona.api.domain.user.entity.UserPlatformPreference;
+import com.playona.api.domain.user.repository.UserPlatformPreferenceRepository;
+>>>>>>> Stashed changes
 import java.util.Optional;
 import org.springframework.beans.factory.annotation.Value;
 >>>>>>> Stashed changes
@@ -28,7 +39,13 @@ public class LinkService {
 
   private final YoutubeTrackService youtubeTrackService;
   private final SharedLinkRepository sharedLinkRepository;
+<<<<<<< Updated upstream
   private final UserRepository userRepository;
+=======
+  private final TrackMatchingService trackMatchingService;
+  private final PlatformTrackRepository platformTrackRepository;
+  private final UserPlatformPreferenceRepository userPlatformPreferenceRepository;
+>>>>>>> Stashed changes
 
   @Transactional
   public SharedLink createLink(String url) {
@@ -85,13 +102,40 @@ public class LinkService {
     return sharedLinkRepository.findByShortCode(shortCode)
         .orElseThrow(() -> new RuntimeException("링크를 찾을 수 없습니다: " + shortCode));
   }
+<<<<<<< Updated upstream
   @Transactional
   public String getRedirectUrl(String shortCode) {
+=======
+
+  @Transactional
+  public String getRedirectUrl(String shortCode, String userUuid) {
+>>>>>>> Stashed changes
     SharedLink sharedLink = sharedLinkRepository.findByShortCode(shortCode)
         .orElseThrow(() -> new RuntimeException("링크를 찾을 수 없습니다: " + shortCode));
 
     // click_count 증가
     sharedLink.incrementClickCount();
+
+    if (userUuid == null) {
+      return sharedLink.getTrack().getSourceUrl();
+    }
+
+    User user = userRepository.findByUserUuid(userUuid).orElse(null);
+    if (user != null) {
+      List<UserPlatformPreference> prefs = userPlatformPreferenceRepository
+          .findByUserOrderByPriorityAsc(user);
+      List<PlatformTrack> platformTracks = platformTrackRepository
+          .findByTrack(sharedLink.getTrack());
+
+      for (UserPlatformPreference pref : prefs) {
+        Optional<PlatformTrack> match = platformTracks.stream()
+            .filter(pt -> pt.getPlatform().getId().equals(pref.getPlatform().getId()))
+            .findFirst();
+        if (match.isPresent()) {
+          return match.get().getUrl();
+        }
+      }
+    }
 
     return sharedLink.getTrack().getSourceUrl();
   }
