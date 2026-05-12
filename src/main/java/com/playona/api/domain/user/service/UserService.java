@@ -26,84 +26,118 @@ public class UserService {
     private final PlatformRepository platformRepository;
     private final UserPlatformPreferenceRepository preferenceRepository;
 
+    // ── UUID 기반 (JWT) ──────────────────────────────────────────
+
+    @Transactional(readOnly = true)
+    public UserResponse getMyInfoByUuid(String userUuid) {
+        User user = getUserByUuidOrThrow(userUuid);
+        return toUserResponse(user);
+    }
+
+    public UserResponse updateMyInfoByUuid(String userUuid, UpdateUserRequest request) {
+        User user = getUserByUuidOrThrow(userUuid);
+        if (request.getNickname() != null && !request.getNickname().isBlank()) {
+            user.setNickname(request.getNickname());
+        }
+        if (request.getProfileImageUrl() != null) {
+            user.setProfileImageUrl(request.getProfileImageUrl());
+        }
+        return toUserResponse(user);
+    }
+
+    @Transactional(readOnly = true)
+    public List<PlatformPreferenceResponse> getMyPlatformsByUuid(String userUuid) {
+        User user = getUserByUuidOrThrow(userUuid);
+        return toPlatformPreferenceResponses(user);
+    }
+
+    public List<PlatformPreferenceResponse> updateMyPlatformsByUuid(String userUuid, List<PlatformPreferenceRequest> requests) {
+        User user = getUserByUuidOrThrow(userUuid);
+        return updatePlatforms(user, requests);
+    }
+
+    // ── ID 기반 (레거시) ─────────────────────────────────────────
+
     @Transactional(readOnly = true)
     public UserResponse getMyInfo(Long userId) {
-        User user = getUserOrThrow(userId);
-
-        return UserResponse.builder()
-                .userUuid(user.getUserUuid())
-                .email(user.getEmail())
-                .nickname(user.getNickname())
-                .profileImageUrl(user.getProfileImageUrl())
-                .createdAt(user.getCreatedAt())
-                .build();
+        return toUserResponse(getUserOrThrow(userId));
     }
 
     public UserResponse updateMyInfo(Long userId, UpdateUserRequest request) {
         User user = getUserOrThrow(userId);
-
         if (request.getNickname() != null && !request.getNickname().isBlank()) {
             user.setNickname(request.getNickname());
         }
-
         if (request.getProfileImageUrl() != null) {
             user.setProfileImageUrl(request.getProfileImageUrl());
         }
-
-        return UserResponse.builder()
-                .userUuid(user.getUserUuid())
-                .email(user.getEmail())
-                .nickname(user.getNickname())
-                .profileImageUrl(user.getProfileImageUrl())
-                .createdAt(user.getCreatedAt())
-                .build();
+        return toUserResponse(user);
     }
 
     @Transactional(readOnly = true)
     public List<PlatformPreferenceResponse> getMyPlatforms(Long userId) {
-        User user = getUserOrThrow(userId);
-
-        return preferenceRepository.findByUserOrderByPriorityAsc(user)
-                .stream()
-                .map(pref -> PlatformPreferenceResponse.builder()
-                        .platformId(pref.getPlatform().getId())
-                        .platformName(pref.getPlatform().getName())
-                        .priority(pref.getPriority())
-                        .build())
-                .toList();
+        return toPlatformPreferenceResponses(getUserOrThrow(userId));
     }
 
     public List<PlatformPreferenceResponse> updateMyPlatforms(Long userId, List<PlatformPreferenceRequest> requests) {
-        User user = getUserOrThrow(userId);
+        return updatePlatforms(getUserOrThrow(userId), requests);
+    }
 
+    // ── 공통 헬퍼 ───────────────────────────────────────────────
+
+    private List<PlatformPreferenceResponse> updatePlatforms(User user, List<PlatformPreferenceRequest> requests) {
         if (requests == null || requests.isEmpty()) {
             throw new IllegalArgumentException("Platform preference list cannot be empty");
         }
 
         List<PlatformPreferenceRequest> sortedRequests = requests.stream()
-                .sorted(Comparator.comparingInt(PlatformPreferenceRequest::getPriority))
-                .toList();
+            .sorted(Comparator.comparingInt(PlatformPreferenceRequest::getPriority))
+            .toList();
 
         preferenceRepository.deleteByUser(user);
 
         for (PlatformPreferenceRequest request : sortedRequests) {
             Platform platform = platformRepository.findById(request.getPlatformId())
-                    .orElseThrow(() -> new IllegalArgumentException("Platform not found: " + request.getPlatformId()));
+                .orElseThrow(() -> new IllegalArgumentException("Platform not found: " + request.getPlatformId()));
 
-            UserPlatformPreference preference = UserPlatformPreference.builder()
-                    .user(user)
-                    .platform(platform)
-                    .priority(request.getPriority())
-                    .build();
-
-            preferenceRepository.save(preference);
+            preferenceRepository.save(UserPlatformPreference.builder()
+                .user(user)
+                .platform(platform)
+                .priority(request.getPriority())
+                .build());
         }
 
-        return getMyPlatforms(userId);
+        return toPlatformPreferenceResponses(user);
+    }
+
+    private List<PlatformPreferenceResponse> toPlatformPreferenceResponses(User user) {
+        return preferenceRepository.findByUserOrderByPriorityAsc(user)
+            .stream()
+            .map(pref -> PlatformPreferenceResponse.builder()
+                .platformId(pref.getPlatform().getId())
+                .platformName(pref.getPlatform().getName())
+                .priority(pref.getPriority())
+                .build())
+            .toList();
+    }
+
+    private UserResponse toUserResponse(User user) {
+        return UserResponse.builder()
+            .userUuid(user.getUserUuid())
+            .email(user.getEmail())
+            .nickname(user.getNickname())
+            .profileImageUrl(user.getProfileImageUrl())
+            .createdAt(user.getCreatedAt())
+            .build();
+    }
+
+    private User getUserByUuidOrThrow(String userUuid) {
+        return userRepository.findByUserUuid(userUuid)
+            .orElseThrow(() -> new IllegalArgumentException("User not found: " + userUuid));
     }
 
     private User getUserOrThrow(Long userId) {
         return userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("User not found: " + userId));
+            .orElseThrow(() -> new IllegalArgumentException("User not found: " + userId));
     }
 }
