@@ -13,6 +13,13 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 public class SharedLink {
 
+  public SharedLink(String shortCode, Track track, User user) {
+    this.shortCode = shortCode;
+    this.track = track;
+    this.user = user;
+    this.clickCount = 0;
+  }
+
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
