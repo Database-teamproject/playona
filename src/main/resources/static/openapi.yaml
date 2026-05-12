@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: Playona API
   description: 크로스 플랫폼 음악 공유 서비스 API
-  version: 1.0.1
+  version: 1.0.2
 
 servers:
   - url: http://localhost:8080
@@ -30,6 +30,22 @@ components:
       bearerFormat: JWT
 
   schemas:
+    ApiResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+        message:
+          type: string
+          nullable: true
+          example: null
+        result:
+          type: string
+          example: SUCCESS
+
     TokenResponse:
       type: object
       properties:
@@ -73,7 +89,8 @@ components:
           example: spotify
         logoUrl:
           type: string
-          example: https://...
+          nullable: true
+          example: null
         isActive:
           type: boolean
           example: true
@@ -103,6 +120,9 @@ components:
         url:
           type: string
           example: https://open.spotify.com/track/abc123
+        thumbnailUrl:
+          type: string
+          example: https://i.scdn.co/image/...
 
     SharedLinkResponse:
       type: object
@@ -122,19 +142,30 @@ components:
         clickCount:
           type: integer
           example: 42
+        shareUrl:
+          type: string
+          example: http://localhost:8080/t/abc123
+        platforms:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlatformUrlResponse'
 
     ErrorResponse:
       type: object
       properties:
-        status:
-          type: integer
-          example: 404
+        success:
+          type: boolean
+          example: false
+        data:
+          type: object
+          nullable: true
+          example: null
         message:
           type: string
           example: 곡을 찾을 수 없습니다
-        timestamp:
+        result:
           type: string
-          format: date-time
+          example: FAIL
 
 paths:
   # ========== 인증 ==========
@@ -164,7 +195,6 @@ paths:
     post:
       tags: [인증]
       summary: 토큰 재발급
-      description: Refresh Token으로 새 Access Token을 재발급합니다
       requestBody:
         required: true
         content:
@@ -181,7 +211,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TokenResponse'
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/TokenResponse'
         '401':
           description: Refresh Token 만료 또는 유효하지 않음
 
@@ -189,7 +224,6 @@ paths:
     post:
       tags: [인증]
       summary: 로그아웃
-      description: Refresh Token을 삭제합니다
       security:
         - bearerAuth: []
       requestBody:
@@ -204,8 +238,10 @@ paths:
       responses:
         '200':
           description: 로그아웃 성공
-        '401':
-          description: 인증 필요
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
 
   # ========== 유저 ==========
   /api/users/me:
@@ -220,7 +256,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UserResponse'
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/UserResponse'
         '401':
           description: 인증 필요
 
@@ -241,16 +282,18 @@ paths:
                   example: 윤성
                 profileImageUrl:
                   type: string
-                  example: https://...
       responses:
         '200':
           description: 수정 성공
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UserResponse'
-        '401':
-          description: 인증 필요
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/UserResponse'
 
   /api/users/me/platforms:
     get:
@@ -264,11 +307,14 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/PlatformPreferenceResponse'
-        '401':
-          description: 인증 필요
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/PlatformPreferenceResponse'
 
     put:
       tags: [유저]
@@ -297,34 +343,40 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/PlatformPreferenceResponse'
-        '401':
-          description: 인증 필요
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/PlatformPreferenceResponse'
 
   # ========== 플랫폼 ==========
   /api/platforms:
     get:
       tags: [플랫폼]
       summary: 지원 플랫폼 목록 조회
-      description: 현재 활성화된 플랫폼 목록을 반환합니다
       responses:
         '200':
           description: 조회 성공
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/PlatformResponse'
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/PlatformResponse'
 
   # ========== 트랙 ==========
   /api/tracks/resolve:
     get:
       tags: [트랙]
       summary: URL로 곡 정보 조회
-      description: 플랫폼 URL을 입력하면 곡 메타데이터와 각 플랫폼 매칭 결과를 반환합니다
       parameters:
         - name: url
           in: query
@@ -385,9 +437,18 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SharedLinkResponse'
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/SharedLinkResponse'
         '400':
           description: 잘못된 URL 형식 또는 지원하지 않는 플랫폼
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/links/my:
     get:
@@ -401,9 +462,14 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/SharedLinkResponse'
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/SharedLinkResponse'
         '401':
           description: 인증 필요
 
@@ -424,7 +490,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SharedLinkResponse'
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/SharedLinkResponse'
         '404':
           description: 링크 없음
 
@@ -435,7 +506,7 @@ paths:
       description: |
         로그인 유저의 선호 플랫폼 순서대로 매칭된 URL로 리디렉션합니다.
         - 로그인 유저: 설정된 선호 플랫폼 1순위부터 매칭된 플랫폼으로 자동 리디렉션
-        - 비로그인 유저: `GET /api/links/{shortCode}/platforms` 를 통해 플랫폼 선택 후 직접 이동
+        - 비로그인 유저: GET /api/links/{shortCode}/platforms 를 통해 플랫폼 선택 후 직접 이동
       security:
         - bearerAuth: []
         - {}
@@ -456,8 +527,7 @@ paths:
     get:
       tags: [공유링크]
       summary: 링크의 플랫폼별 URL 목록 조회
-      description: |
-        비로그인 유저가 플랫폼을 선택할 수 있도록 매칭된 플랫폼 URL 목록을 반환합니다.
+      description: 비로그인 유저가 플랫폼을 선택할 수 있도록 매칭된 플랫폼 URL 목록을 반환합니다.
       parameters:
         - name: shortCode
           in: path
@@ -471,8 +541,13 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/PlatformUrlResponse'
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/PlatformUrlResponse'
         '404':
           description: 링크 없음

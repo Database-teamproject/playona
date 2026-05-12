@@ -20,6 +20,7 @@ public class TrackMatchingService {
   private final PlatformTrackRepository platformTrackRepository;
   private final SpotifyTrackService spotifyTrackService;
   private final YoutubeTrackService youtubeTrackService;
+  private final AppleTrackService appleTrackService;
 
   public List<PlatformTrack> matchAll(Track track) {
     List<Platform> platforms = platformRepository.findByIsActiveTrue();
@@ -48,6 +49,7 @@ public class TrackMatchingService {
     return switch (platform.getSlug()) {
       case "spotify" -> spotifyTrackService.searchTrack(track, platform);
       case "ytmusic" -> youtubeTrackService.searchTrack(track, platform);
+      case "apple" -> appleTrackService.searchTrack(track, platform);
       default -> null;
     };
   }
