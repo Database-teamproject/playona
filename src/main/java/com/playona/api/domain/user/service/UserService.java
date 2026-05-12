@@ -59,12 +59,21 @@ public class UserService {
     // ── ID 기반 (레거시) ─────────────────────────────────────────
 
     @Transactional(readOnly = true)
+<<<<<<< Updated upstream
     public UserResponse getMyInfo(Long userId) {
         return toUserResponse(getUserOrThrow(userId));
     }
 
     public UserResponse updateMyInfo(Long userId, UpdateUserRequest request) {
         User user = getUserOrThrow(userId);
+=======
+    public UserResponse getMyInfoByUuid(String userUuid) {
+        return toUserResponse(getUserByUuidOrThrow(userUuid));
+    }
+
+    public UserResponse updateMyInfoByUuid(String userUuid, UpdateUserRequest request) {
+        User user = getUserByUuidOrThrow(userUuid);
+>>>>>>> Stashed changes
         if (request.getNickname() != null && !request.getNickname().isBlank()) {
             user.setNickname(request.getNickname());
         }
@@ -75,6 +84,7 @@ public class UserService {
     }
 
     @Transactional(readOnly = true)
+<<<<<<< Updated upstream
     public List<PlatformPreferenceResponse> getMyPlatforms(Long userId) {
         return toPlatformPreferenceResponses(getUserOrThrow(userId));
     }
@@ -85,6 +95,16 @@ public class UserService {
 
     // ── 공통 헬퍼 ───────────────────────────────────────────────
 
+=======
+    public List<PlatformPreferenceResponse> getMyPlatformsByUuid(String userUuid) {
+        return toPlatformPreferenceResponses(getUserByUuidOrThrow(userUuid));
+    }
+
+    public List<PlatformPreferenceResponse> updateMyPlatformsByUuid(String userUuid, List<PlatformPreferenceRequest> requests) {
+        return updatePlatforms(getUserByUuidOrThrow(userUuid), requests);
+    }
+
+>>>>>>> Stashed changes
     private List<PlatformPreferenceResponse> updatePlatforms(User user, List<PlatformPreferenceRequest> requests) {
         if (requests == null || requests.isEmpty()) {
             throw new IllegalArgumentException("Platform preference list cannot be empty");
@@ -129,6 +149,7 @@ public class UserService {
             .profileImageUrl(user.getProfileImageUrl())
             .createdAt(user.getCreatedAt())
             .build();
+<<<<<<< Updated upstream
     }
 
     private User getUserByUuidOrThrow(String userUuid) {
@@ -139,5 +160,12 @@ public class UserService {
     private User getUserOrThrow(Long userId) {
         return userRepository.findById(userId)
             .orElseThrow(() -> new IllegalArgumentException("User not found: " + userId));
+=======
+    }
+
+    private User getUserByUuidOrThrow(String userUuid) {
+        return userRepository.findByUserUuid(userUuid)
+            .orElseThrow(() -> new IllegalArgumentException("User not found: " + userUuid));
+>>>>>>> Stashed changes
     }
 }
