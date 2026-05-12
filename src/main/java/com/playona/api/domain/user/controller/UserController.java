@@ -22,31 +22,31 @@ public class UserController {
 
     @GetMapping
     public ResponseEntity<ApiResponse<UserResponse>> getMyInfo(
-        @RequestHeader(value = "X-USER-ID", defaultValue = "1") Long userId
+        @AuthenticationPrincipal String userUuid
     ) {
-        return ResponseEntity.ok(ApiResponse.ok(userService.getMyInfo(userId)));
+        return ResponseEntity.ok(ApiResponse.ok(userService.getMyInfoByUuid(userUuid)));
     }
 
     @PutMapping
     public ResponseEntity<ApiResponse<UserResponse>> updateMyInfo(
-        @RequestHeader(value = "X-USER-ID", defaultValue = "1") Long userId,
+        @AuthenticationPrincipal String userUuid,
         @RequestBody UpdateUserRequest request
     ) {
-        return ResponseEntity.ok(ApiResponse.ok(userService.updateMyInfo(userId, request)));
+        return ResponseEntity.ok(ApiResponse.ok(userService.updateMyInfoByUuid(userUuid, request)));
     }
 
     @GetMapping("/platforms")
     public ResponseEntity<ApiResponse<List<PlatformPreferenceResponse>>> getMyPlatforms(
-        @RequestHeader(value = "X-USER-ID", defaultValue = "1") Long userId
+        @AuthenticationPrincipal String userUuid
     ) {
-        return ResponseEntity.ok(ApiResponse.ok(userService.getMyPlatforms(userId)));
+        return ResponseEntity.ok(ApiResponse.ok(userService.getMyPlatformsByUuid(userUuid)));
     }
 
     @PutMapping("/platforms")
     public ResponseEntity<ApiResponse<List<PlatformPreferenceResponse>>> updateMyPlatforms(
-        @RequestHeader(value = "X-USER-ID", defaultValue = "1") Long userId,
+        @AuthenticationPrincipal String userUuid,
         @RequestBody List<PlatformPreferenceRequest> requests
     ) {
-        return ResponseEntity.ok(ApiResponse.ok(userService.updateMyPlatforms(userId, requests)));
+        return ResponseEntity.ok(ApiResponse.ok(userService.updateMyPlatformsByUuid(userUuid, requests)));
     }
 }
