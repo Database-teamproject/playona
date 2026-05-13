@@ -16,7 +16,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-
   app:
     build: .
     container_name: playona-app
@@ -27,10 +26,13 @@ services:
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
+      SPOTIFY_CLIENT_ID: ${SPOTIFY_CLIENT_ID}
+      SPOTIFY_CLIENT_SECRET: ${SPOTIFY_CLIENT_SECRET}
+      YOUTUBE_API_KEY: ${YOUTUBE_API_KEY}
     depends_on:
       db:
         condition: service_healthy
     restart: always
-
 volumes:
   postgres-data:
+
