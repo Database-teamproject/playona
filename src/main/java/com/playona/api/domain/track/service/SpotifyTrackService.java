@@ -102,6 +102,15 @@ public class SpotifyTrackService {
       String trackId = item.getId();
       String url = "https://open.spotify.com/track/" + trackId;
 
+      // Track에 ISRC가 없으면 Spotify 검색 결과에서 업데이트 (YouTube 등 ISRC 없는 플랫폼 보완)
+      if (track.getIsrc() == null) {
+        String isrc = item.getExternalIds().getExternalIds().get("isrc");
+        if (isrc != null) {
+          track.updateIsrc(isrc);
+          trackRepository.save(track);
+        }
+      }
+
       return new PlatformTrack(track, platform, trackId, url, item.getName(),
           Arrays.stream(item.getArtists()).map(ArtistSimplified::getName).collect(Collectors.joining(", ")));
 

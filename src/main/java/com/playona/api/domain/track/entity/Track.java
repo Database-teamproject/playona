@@ -53,6 +53,10 @@ public class Track {
   @Column(name = "source_url")
   private String sourceUrl;
 
+  public void updateIsrc(String isrc) {
+    this.isrc = isrc;
+  }
+
   @PrePersist
   protected void onCreate() {
     createdAt = LocalDateTime.now();
