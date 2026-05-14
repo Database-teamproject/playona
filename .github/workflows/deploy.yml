@@ -21,6 +21,7 @@ jobs:
             echo "SPOTIFY_CLIENT_ID=${{ secrets.SPOTIFY_CLIENT_ID }}" >> .env
             echo "SPOTIFY_CLIENT_SECRET=${{ secrets.SPOTIFY_CLIENT_SECRET }}" >> .env
             echo "YOUTUBE_API_KEY=${{ secrets.YOUTUBE_API_KEY }}" >> .env
+            echo "APP_BASE_URL=${{ secrets.APP_BASE_URL }}" >> .env
             git pull origin dev
             docker-compose down
             docker-compose up -d --build
