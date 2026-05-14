@@ -62,7 +62,7 @@ public class SecurityConfig {
     CorsConfiguration config = new CorsConfiguration();
     config.setAllowedOrigins(List.of(
         "http://localhost:3000",
-        "https://playona-6ggn710vj-nullisdefined-personal.vercel.app"  // 실제 프론트 도메인으로 변경
+        "https://playona-five.vercel.app/"  // 실제 프론트 도메인으로 변경
     ));
     config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
     config.setAllowedHeaders(List.of("*"));
