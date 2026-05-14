@@ -1,9 +1,9 @@
 package com.playona.api.domain.track.controller;
 
-import com.playona.api.domain.track.dto.TrackDetailResponse;
-import com.playona.api.domain.track.dto.TrackResolveResponse;
 import com.playona.api.domain.track.service.TrackService;
+import com.playona.api.global.common.ApiResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -14,12 +14,12 @@ public class TrackController {
     private final TrackService trackService;
 
     @GetMapping("/resolve")
-    public TrackResolveResponse resolveTrack(@RequestParam String url) {
-        return trackService.resolveTrack(url);
+    public ResponseEntity<ApiResponse<?>> resolveTrack(@RequestParam String url) {
+        return ResponseEntity.ok(ApiResponse.ok(trackService.resolveTrack(url)));
     }
 
     @GetMapping("/{trackId}")
-    public TrackDetailResponse getTrackDetail(@PathVariable Long trackId) {
-        return trackService.getTrackDetail(trackId);
+    public ResponseEntity<ApiResponse<?>> getTrackDetail(@PathVariable Long trackId) {
+        return ResponseEntity.ok(ApiResponse.ok(trackService.getTrackDetail(trackId)));
     }
 }

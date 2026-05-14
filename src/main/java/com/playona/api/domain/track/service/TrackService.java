@@ -4,6 +4,7 @@ import com.playona.api.domain.track.dto.TrackDetailResponse;
 import com.playona.api.domain.track.dto.TrackResolveResponse;
 import com.playona.api.domain.track.entity.Track;
 import com.playona.api.domain.track.repository.TrackRepository;
+import com.playona.api.global.exception.NotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class TrackService {
 
     private final TrackRepository trackRepository;
+    private final TrackMatchingService trackMatchingService;
     private final YoutubeTrackService youtubeTrackService;
     private final SpotifyTrackService spotifyTrackService;
     private final AppleTrackService appleTrackService;
@@ -32,6 +34,8 @@ public class TrackService {
             throw new IllegalArgumentException("Unsupported platform URL: " + url);
         }
 
+        trackMatchingService.matchAll(track);
+
         return TrackResolveResponse.builder()
                 .trackId(track.getId())
                 .title(track.getTitle())
@@ -47,7 +51,7 @@ public class TrackService {
 
     public TrackDetailResponse getTrackDetail(Long trackId) {
         Track track = trackRepository.findById(trackId)
-                .orElseThrow(() -> new RuntimeException("Track not found: " + trackId));
+                .orElseThrow(() -> new NotFoundException("트랙을 찾을 수 없습니다: " + trackId));
 
         return TrackDetailResponse.builder()
                 .trackId(track.getId())

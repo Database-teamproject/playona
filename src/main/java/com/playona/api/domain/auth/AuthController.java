@@ -6,8 +6,10 @@ import com.playona.api.global.common.ApiResponse;
 import com.playona.api.global.security.JwtProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.Map;
 
 @RestController
@@ -18,6 +20,7 @@ public class AuthController {
   private final RefreshTokenRepository refreshTokenRepository;
   private final JwtProvider jwtProvider;
 
+  @Transactional
   @PostMapping("/refresh")
   public ResponseEntity<ApiResponse<?>> refresh(@RequestBody Map<String, String> body) {
     String refreshToken = body.get("refreshToken");
@@ -30,8 +33,22 @@ public class AuthController {
       throw new IllegalArgumentException("만료된 Refresh Token입니다.");
     }
 
-    String newAccessToken = jwtProvider.generateToken(token.getUser().getUserUuid());
-    return ResponseEntity.ok(ApiResponse.ok(Map.of("accessToken", newAccessToken)));
+    String userUuid = token.getUser().getUserUuid();
+    String newAccessToken = jwtProvider.generateToken(userUuid);
+    String newRefreshToken = jwtProvider.generateRefreshToken(userUuid);
+
+    // Refresh Token Rotation: 기존 토큰 삭제 후 새 토큰 저장
+    refreshTokenRepository.delete(token);
+    refreshTokenRepository.save(new RefreshToken(
+        token.getUser(),
+        newRefreshToken,
+        LocalDateTime.now().plusSeconds(jwtProvider.getRefreshExpiration() / 1000)
+    ));
+
+    return ResponseEntity.ok(ApiResponse.ok(Map.of(
+        "accessToken", newAccessToken,
+        "refreshToken", newRefreshToken
+    )));
   }
 
   @PostMapping("/logout")

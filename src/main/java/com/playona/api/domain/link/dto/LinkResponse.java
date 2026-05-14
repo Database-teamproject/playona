@@ -26,11 +26,14 @@ public class LinkResponse {
     this.clickCount = sharedLink.getClickCount() != null
             ? sharedLink.getClickCount() : 0;
     this.shareUrl = baseUrl + "/t/" + sharedLink.getShortCode();
+    String trackThumbnail = sharedLink.getTrack().getThumbnailUrl() != null
+            ? sharedLink.getTrack().getThumbnailUrl() : "";
     this.platforms = platformTracks.stream()
             .map(pt -> Map.of(
                     "slug", pt.getPlatform().getSlug(),
                     "name", pt.getPlatform().getName(),
-                    "url", pt.getUrl()
+                    "url", pt.getUrl(),
+                    "thumbnailUrl", trackThumbnail
             ))
             .toList();
   }

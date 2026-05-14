@@ -6,6 +6,7 @@ import com.playona.api.domain.link.entity.SharedLinkRepository;
 import com.playona.api.domain.platform.entity.PlatformTrack;
 import com.playona.api.domain.platform.repository.PlatformTrackRepository;
 import com.playona.api.domain.track.entity.Track;
+import com.playona.api.global.exception.NotFoundException;
 import com.playona.api.domain.track.service.AppleTrackService;
 import com.playona.api.domain.track.service.SpotifyTrackService;
 import com.playona.api.domain.track.service.TrackMatchingService;
@@ -89,13 +90,18 @@ public class LinkService {
 
     public SharedLink getLink(String shortCode) {
         return sharedLinkRepository.findByShortCode(shortCode)
-            .orElseThrow(() -> new RuntimeException("링크를 찾을 수 없습니다: " + shortCode));
+            .orElseThrow(() -> new NotFoundException("링크를 찾을 수 없습니다: " + shortCode));
+    }
+
+    public LinkResponse getLinkResponse(String shortCode) {
+        SharedLink sharedLink = getLink(shortCode);
+        return new LinkResponse(sharedLink, baseUrl, platformTrackRepository.findByTrack(sharedLink.getTrack()));
     }
 
     @Transactional
     public void incrementClickCount(String shortCode) {
         SharedLink sharedLink = sharedLinkRepository.findByShortCode(shortCode)
-            .orElseThrow(() -> new RuntimeException("링크를 찾을 수 없습니다: " + shortCode));
+            .orElseThrow(() -> new NotFoundException("링크를 찾을 수 없습니다: " + shortCode));
         sharedLink.incrementClickCount();
         sharedLinkRepository.save(sharedLink);
     }
@@ -103,7 +109,7 @@ public class LinkService {
     @Transactional
     public String getRedirectUrl(String shortCode, String userUuid) {
         SharedLink sharedLink = sharedLinkRepository.findByShortCode(shortCode)
-            .orElseThrow(() -> new RuntimeException("링크를 찾을 수 없습니다: " + shortCode));
+            .orElseThrow(() -> new NotFoundException("링크를 찾을 수 없습니다: " + shortCode));
         sharedLink.incrementClickCount();
         sharedLinkRepository.save(sharedLink);
 
@@ -129,7 +135,7 @@ public class LinkService {
 
     public List<Map<String, String>> getPlatformUrls(String shortCode) {
         SharedLink sharedLink = sharedLinkRepository.findByShortCode(shortCode)
-            .orElseThrow(() -> new RuntimeException("링크를 찾을 수 없습니다: " + shortCode));
+            .orElseThrow(() -> new NotFoundException("링크를 찾을 수 없습니다: " + shortCode));
 
         return platformTrackRepository.findByTrack(sharedLink.getTrack()).stream()
             .map(pt -> Map.of(
