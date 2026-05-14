@@ -4,11 +4,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.playona.api.domain.platform.entity.Platform;
 import com.playona.api.domain.platform.entity.PlatformTrack;
 import com.playona.api.domain.track.entity.Track;
-import com.playona.api.domain.track.entity.TrackRepository;
+import com.playona.api.domain.track.repository.TrackRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -17,131 +20,179 @@ import java.util.Map;
 public class AppleTrackService {
 
   private final TrackRepository trackRepository;
-  private final WebClient webClient = WebClient.create("https://itunes.apple.com");
   private final ObjectMapper objectMapper = new ObjectMapper();
 
   public Track getTrackFromUrl(String url) {
-    String trackId = extractAppleTrackId(url);
+    String trackId = extractTrackId(url);
 
-    try {
-      String responseBody = webClient.get()
-          .uri(uriBuilder -> uriBuilder
-              .path("/lookup")
-              .queryParam("id", trackId)
-              .queryParam("entity", "song")
-              .build())
-          .header("Accept", "application/json")
-          .retrieve()
-          .bodyToMono(String.class)
-          .block();
+    String lookupUrl = "https://itunes.apple.com/lookup?id=" +
+            URLEncoder.encode(trackId, StandardCharsets.UTF_8) +
+            "&entity=song";
 
-      Map response = objectMapper.readValue(responseBody, Map.class);
-      List results = (List) response.get("results");
-      if (results == null || results.isEmpty()) {
-        throw new RuntimeException("Apple Music에서 트랙을 찾을 수 없습니다: " + trackId);
-      }
+    Map response = getAppleResponseAsMap(lookupUrl, "Failed to parse Apple lookup response");
 
-      Map item = (Map) results.get(0);
-      // wrapperType이 track인 경우만 처리 (artist, collection 등 제외)
-      if (!"track".equals(item.get("wrapperType"))) {
-        throw new RuntimeException("해당 Apple Music ID는 트랙이 아닙니다: " + trackId);
-      }
-
-      String title = (String) item.get("trackName");
-      String artist = (String) item.get("artistName");
-      String thumbnail = ((String) item.get("artworkUrl100")).replace("100x100", "500x500");
-      String sourceUrl = (String) item.get("trackViewUrl");
-      // 쿼리 파라미터 제거해서 정규화
-      String cleanUrl = sourceUrl.split("\\?")[0];
-
-      // source_url 중복 체크
-      Track existing = trackRepository.findBySourceUrl(cleanUrl);
-      if (existing != null) return existing;
-
-      Track track = new Track(title, artist, thumbnail, cleanUrl);
-      return trackRepository.save(track);
-
-    } catch (RuntimeException e) {
-      throw e;
-    } catch (Exception e) {
-      throw new RuntimeException("Apple Music 트랙 조회 실패: " + e.getMessage());
+    List results = (List) response.get("results");
+    if (results == null || results.isEmpty()) {
+      throw new RuntimeException("No Apple track found for ID: " + trackId);
     }
+
+    Map item = null;
+
+    for (Object obj : results) {
+      Map row = (Map) obj;
+      Object wrapperType = row.get("wrapperType");
+      Object kind = row.get("kind");
+      if ("track".equals(wrapperType) || "song".equals(kind)) {
+        item = row;
+        break;
+      }
+    }
+
+    if (item == null) {
+      item = (Map) results.get(0);
+    }
+
+    String title = (String) item.get("trackName");
+    String artist = (String) item.get("artistName");
+    String album = (String) item.get("collectionName");
+    String isrc = (String) item.get("isrc");
+    String sourceUrl = (String) item.get("trackViewUrl");
+    String thumbnail = (String) item.get("artworkUrl100");
+
+    Integer durationMs = null;
+    if (item.get("trackTimeMillis") instanceof Integer ms) {
+      durationMs = ms;
+    } else if (item.get("trackTimeMillis") instanceof Number n) {
+      durationMs = n.intValue();
+    }
+
+    LocalDate releaseDate = null;
+    String releaseDateStr = (String) item.get("releaseDate");
+    if (releaseDateStr != null && releaseDateStr.length() >= 10) {
+      try {
+        releaseDate = LocalDate.parse(releaseDateStr.substring(0, 10));
+      } catch (Exception ignored) {
+      }
+    }
+
+    if (isrc != null && trackRepository.existsByIsrc(isrc)) {
+      return trackRepository.findByIsrc(isrc).orElseThrow();
+    }
+
+    Track existingTrack = trackRepository.findFirstBySourceUrl(sourceUrl).orElse(null);
+    if (existingTrack != null) {
+      return existingTrack;
+    }
+
+    Track newTrack = new Track(title, artist, thumbnail, sourceUrl, isrc);
+    newTrack.setAlbum(album);
+    newTrack.setDurationMs(durationMs);
+    newTrack.setReleaseDate(releaseDate);
+
+    return trackRepository.save(newTrack);
   }
 
-  private String extractAppleTrackId(String url) {
-    // https://music.apple.com/kr/album/album-name/123456789?i=987654321
-    if (url.contains("?i=")) {
-      return url.split("\\?i=")[1].split("&")[0];
+  private String extractTrackId(String url) {
+    if (url == null || !url.contains("music.apple.com/")) {
+      throw new IllegalArgumentException("Not a valid Apple Music URL: " + url);
     }
-    // https://music.apple.com/kr/song/song-name/987654321
-    String path = url.split("\\?")[0];
-    String[] segments = path.split("/");
-    String lastSegment = segments[segments.length - 1];
-    if (lastSegment.matches("\\d+")) {
-      return lastSegment;
+
+    // album URL with selected song: ?i=1337452977
+    int index = url.indexOf("?i=");
+    if (index != -1) {
+      String songId = url.substring(index + 3).split("&")[0];
+      if (songId.matches("\\d+")) {
+        return songId;
+      }
     }
-    throw new IllegalArgumentException("올바른 Apple Music URL이 아닙니다: " + url);
+
+    // direct /song/.../<id> or fallback numeric segment
+    String[] parts = url.split("/");
+    for (int i = parts.length - 1; i >= 0; i--) {
+      String part = parts[i].split("\\?")[0];
+      if (part.matches("\\d+")) {
+        return part;
+      }
+    }
+
+    throw new IllegalArgumentException("Could not extract Apple Music track ID from URL: " + url);
   }
 
   public PlatformTrack searchTrack(Track track, Platform platform) {
     try {
-      // 1차: ISRC lookup
-      if (track.getIsrc() != null) {
-        PlatformTrack result = lookupByIsrc(track, platform);
-        if (result != null) return result;
+      // 1. ISRC first
+      if (track.getIsrc() != null && !track.getIsrc().isBlank()) {
+        PlatformTrack byIsrc = searchAppleByIsrc(track, platform, track.getIsrc());
+        if (byIsrc != null) {
+          return byIsrc;
+        }
       }
 
-      // 2차: 제목+아티스트 fallback
-      return searchByQuery(track.getTitle() + " " + track.getArtist(), track, platform);
+      // 2. fallback: title + artist
+      return searchAppleByTitleArtist(track, platform);
 
     } catch (Exception e) {
-      throw new RuntimeException("Apple Music 검색 실패: " + e.getMessage());
+      throw new RuntimeException("Apple search failed: " + e.getMessage(), e);
     }
   }
 
-  private PlatformTrack lookupByIsrc(Track track, Platform platform) throws Exception {
-    String responseBody = webClient.get()
-        .uri(uriBuilder -> uriBuilder
-            .path("/lookup")
-            .queryParam("isrc", track.getIsrc())
-            .build())
-        .header("Accept", "application/json")
-        .retrieve()
-        .bodyToMono(String.class)
-        .block();
+  private PlatformTrack searchAppleByIsrc(Track track, Platform platform, String isrc) {
+    String lookupUrl = "https://itunes.apple.com/lookup?isrc=" +
+            URLEncoder.encode(isrc, StandardCharsets.UTF_8);
 
-    return parseResponse(responseBody, track, platform);
-  }
+    Map response = getAppleResponseAsMap(lookupUrl, "Failed to parse Apple ISRC lookup response");
 
-  private PlatformTrack searchByQuery(String query, Track track, Platform platform) throws Exception {
-    String responseBody = webClient.get()
-        .uri(uriBuilder -> uriBuilder
-            .path("/search")
-            .queryParam("term", query)
-            .queryParam("media", "music")
-            .queryParam("entity", "song")
-            .queryParam("country", "kr")
-            .queryParam("limit", "1")
-            .build())
-        .header("Accept", "application/json")
-        .retrieve()
-        .bodyToMono(String.class)
-        .block();
-
-    return parseResponse(responseBody, track, platform);
-  }
-
-  private PlatformTrack parseResponse(String responseBody, Track track, Platform platform) throws Exception {
-    Map response = objectMapper.readValue(responseBody, Map.class);
     List results = (List) response.get("results");
     if (results == null || results.isEmpty()) return null;
 
     Map item = (Map) results.get(0);
+
+    String trackId = String.valueOf(item.get("trackId"));
     String url = (String) item.get("trackViewUrl");
     String title = (String) item.get("trackName");
     String artist = (String) item.get("artistName");
-    String trackId = String.valueOf(item.get("trackId"));
+
+    if (trackId == null || url == null) return null;
 
     return new PlatformTrack(track, platform, trackId, url, title, artist);
+  }
+
+  private PlatformTrack searchAppleByTitleArtist(Track track, Platform platform) {
+    String query = track.getTitle() + " " + track.getArtist();
+
+    String searchUrl = "https://itunes.apple.com/search?term=" +
+            URLEncoder.encode(query, StandardCharsets.UTF_8) +
+            "&entity=song&limit=1";
+
+    Map response = getAppleResponseAsMap(searchUrl, "Failed to parse Apple search response");
+
+    List results = (List) response.get("results");
+    if (results == null || results.isEmpty()) return null;
+
+    Map item = (Map) results.get(0);
+
+    String trackId = String.valueOf(item.get("trackId"));
+    String url = (String) item.get("trackViewUrl");
+    String title = (String) item.get("trackName");
+    String artist = (String) item.get("artistName");
+
+    if (trackId == null || url == null) return null;
+
+    return new PlatformTrack(track, platform, trackId, url, title, artist);
+  }
+
+  private Map getAppleResponseAsMap(String url, String errorMessage) {
+    try {
+      String responseBody = WebClient.create()
+              .get()
+              .uri(url)
+              .retrieve()
+              .bodyToMono(String.class)
+              .block();
+
+      return objectMapper.readValue(responseBody, Map.class);
+    } catch (Exception e) {
+      throw new RuntimeException(errorMessage + ": " + e.getMessage(), e);
+    }
   }
 }

@@ -22,16 +22,16 @@ public class LinkResponse {
     this.trackTitle = sharedLink.getTrack().getTitle();
     this.trackArtist = sharedLink.getTrack().getArtist();
     this.thumbnailUrl = sharedLink.getTrack().getThumbnailUrl() != null
-        ? sharedLink.getTrack().getThumbnailUrl() : "";
+            ? sharedLink.getTrack().getThumbnailUrl() : "";
     this.clickCount = sharedLink.getClickCount() != null
-        ? sharedLink.getClickCount() : 0;
+            ? sharedLink.getClickCount() : 0;
     this.shareUrl = baseUrl + "/t/" + sharedLink.getShortCode();
     this.platforms = platformTracks.stream()
-        .map(pt -> Map.of(
-            "slug", pt.getPlatform().getSlug(),
-            "name", pt.getPlatform().getName(),
-            "url", pt.getUrl()
-        ))
-        .toList();
+            .map(pt -> Map.of(
+                    "slug", pt.getPlatform().getSlug(),
+                    "name", pt.getPlatform().getName(),
+                    "url", pt.getUrl()
+            ))
+            .toList();
   }
 }

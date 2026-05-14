@@ -23,7 +23,7 @@ public class AuthController {
     String refreshToken = body.get("refreshToken");
 
     RefreshToken token = refreshTokenRepository.findByToken(refreshToken)
-        .orElseThrow(() -> new IllegalArgumentException("유효하지 않은 Refresh Token입니다."));
+            .orElseThrow(() -> new IllegalArgumentException("유효하지 않은 Refresh Token입니다."));
 
     if (token.isExpired()) {
       refreshTokenRepository.delete(token);
@@ -39,7 +39,7 @@ public class AuthController {
     String refreshToken = body.get("refreshToken");
 
     refreshTokenRepository.findByToken(refreshToken)
-        .ifPresent(refreshTokenRepository::delete);
+            .ifPresent(refreshTokenRepository::delete);
 
     return ResponseEntity.ok(ApiResponse.ok(Map.of("message", "로그아웃 되었습니다.")));
   }

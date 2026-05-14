@@ -22,30 +22,30 @@ public class UserController {
 
     @GetMapping
     public ResponseEntity<ApiResponse<UserResponse>> getMyInfo(
-        @AuthenticationPrincipal String userUuid
+            @AuthenticationPrincipal String userUuid
     ) {
         return ResponseEntity.ok(ApiResponse.ok(userService.getMyInfoByUuid(userUuid)));
     }
 
     @PutMapping
     public ResponseEntity<ApiResponse<UserResponse>> updateMyInfo(
-        @AuthenticationPrincipal String userUuid,
-        @RequestBody UpdateUserRequest request
+            @AuthenticationPrincipal String userUuid,
+            @RequestBody UpdateUserRequest request
     ) {
         return ResponseEntity.ok(ApiResponse.ok(userService.updateMyInfoByUuid(userUuid, request)));
     }
 
     @GetMapping("/platforms")
     public ResponseEntity<ApiResponse<List<PlatformPreferenceResponse>>> getMyPlatforms(
-        @AuthenticationPrincipal String userUuid
+            @AuthenticationPrincipal String userUuid
     ) {
         return ResponseEntity.ok(ApiResponse.ok(userService.getMyPlatformsByUuid(userUuid)));
     }
 
     @PutMapping("/platforms")
     public ResponseEntity<ApiResponse<List<PlatformPreferenceResponse>>> updateMyPlatforms(
-        @AuthenticationPrincipal String userUuid,
-        @RequestBody List<PlatformPreferenceRequest> requests
+            @AuthenticationPrincipal String userUuid,
+            @RequestBody List<PlatformPreferenceRequest> requests
     ) {
         return ResponseEntity.ok(ApiResponse.ok(userService.updateMyPlatformsByUuid(userUuid, requests)));
     }

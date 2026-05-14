@@ -4,11 +4,14 @@ import com.playona.api.domain.track.entity.Track;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "platform_tracks",
-    uniqueConstraints = @UniqueConstraint(columnNames = {"track_id", "platform_id"}))
+@Table(
+        name = "platform_tracks",
+        uniqueConstraints = @UniqueConstraint(columnNames = {"track_id", "platform_id"})
+)
 @Getter
 @NoArgsConstructor
 public class PlatformTrack {
@@ -39,9 +42,7 @@ public class PlatformTrack {
   private String platformTrackId;
 
   private String url;
-
   private String title;
-
   private String artist;
 
   @Column(name = "fetched_at")
@@ -57,6 +58,9 @@ public class PlatformTrack {
   protected void onCreate() {
     createdAt = LocalDateTime.now();
     updatedAt = LocalDateTime.now();
+    if (fetchedAt == null) {
+      fetchedAt = LocalDateTime.now();
+    }
   }
 
   @PreUpdate

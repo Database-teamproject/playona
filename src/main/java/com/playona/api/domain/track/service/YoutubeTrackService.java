@@ -3,12 +3,16 @@ package com.playona.api.domain.track.service;
 import com.playona.api.domain.platform.entity.Platform;
 import com.playona.api.domain.platform.entity.PlatformTrack;
 import com.playona.api.domain.track.entity.Track;
-import com.playona.api.domain.track.entity.TrackRepository;
+import com.playona.api.domain.track.repository.TrackRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.time.Duration;
+import java.time.LocalDate;
+import java.util.List;
 import java.util.Map;
 
 @Service
@@ -21,61 +25,82 @@ public class YoutubeTrackService {
   private final TrackRepository trackRepository;
   private final WebClient webClient = WebClient.create("https://www.googleapis.com");
 
+  @Transactional
   public Track getTrackFromUrl(String url) {
     String videoId = extractVideoId(url);
-// source_url로 기존 트랙 조회
-    String sourceUrl = "https://music.youtube.com/watch?v=" + videoId;
-    Track existing = trackRepository.findBySourceUrl(sourceUrl);
-    if (existing != null) return existing;
-    // 이미 DB에 있으면 그냥 반환 (중복 저장 방지)
-    // 나중에 platform_track_id로 체크하도록 개선 예정
 
-    // YouTube API 호출
-    Map response = webClient.get()
-        .uri(uriBuilder -> uriBuilder
-            .path("/youtube/v3/videos")
-            .queryParam("part", "snippet")
-            .queryParam("id", videoId)
-            .queryParam("key", apiKey)
-            .build())
-        .retrieve()
-        .bodyToMono(Map.class)
-        .block();
-
-    // 응답에서 곡 정보 추출
-    var items = (java.util.List) response.get("items");
-    if (items == null || items.isEmpty()) {
-      throw new RuntimeException("YouTube에서 영상을 찾을 수 없습니다: " + videoId);
+    if (videoId.length() != 11) {
+      throw new RuntimeException("Invalid YouTube video ID: " + videoId);
     }
 
-    var snippet = (Map) ((Map) items.get(0)).get("snippet");
-    String title = (String) snippet.get("title");
-    String artist = (String) snippet.get("channelTitle");
-    String thumbnail = (String) ((Map) ((Map) snippet.get("thumbnails")).get("high")).get("url");
+    Map response = webClient.get()
+            .uri(uriBuilder -> uriBuilder
+                    .path("/youtube/v3/videos")
+                    .queryParam("part", "snippet,contentDetails")
+                    .queryParam("id", videoId)
+                    .queryParam("key", apiKey)
+                    .build())
+            .retrieve()
+            .bodyToMono(Map.class)
+            .block();
+
+    if (response == null) {
+      throw new RuntimeException("No response from YouTube API");
+    }
+
+    List items = (List) response.get("items");
+    if (items == null || items.isEmpty()) {
+      throw new RuntimeException("No YouTube video found for ID: " + videoId);
+    }
+
+    Map firstItem = (Map) items.get(0);
+    Map snippet = (Map) firstItem.get("snippet");
+    Map contentDetails = (Map) firstItem.get("contentDetails");
+
+    String title = snippet != null ? (String) snippet.get("title") : null;
+    String artist = snippet != null ? (String) snippet.get("channelTitle") : null;
+
+    String thumbnail = null;
+    if (snippet != null) {
+      Map thumbnails = (Map) snippet.get("thumbnails");
+      if (thumbnails != null) {
+        Map high = (Map) thumbnails.get("high");
+        if (high != null) {
+          thumbnail = (String) high.get("url");
+        }
+      }
+    }
 
     String youtubeUrl = "https://music.youtube.com/watch?v=" + videoId;
-    Track track = new Track(title, artist, thumbnail, youtubeUrl);
-    return trackRepository.save(track);
-  }
 
-  private String extractVideoId(String url) {
-    // https://www.youtube.com/watch?v=VIDEO_ID
-    // https://youtu.be/VIDEO_ID
-    if (url.contains("youtu.be/")) {
-      return url.split("youtu.be/")[1].split("\\?")[0];
-    } else if (url.contains("v=")) {
-      return url.split("v=")[1].split("&")[0];
+    Track existingTrack = trackRepository.findFirstBySourceUrl(youtubeUrl).orElse(null);
+    if (existingTrack != null) {
+      return existingTrack;
     }
-    throw new RuntimeException("올바른 YouTube URL이 아닙니다: " + url);
+
+    Track newTrack = new Track(title, artist, thumbnail, youtubeUrl);
+
+    if (contentDetails != null) {
+      String duration = (String) contentDetails.get("duration");
+      if (duration != null) {
+        newTrack.setDurationMs(parseIsoDurationToMillis(duration));
+      }
+    }
+
+    if (snippet != null) {
+      String publishedAt = (String) snippet.get("publishedAt");
+      if (publishedAt != null && publishedAt.length() >= 10) {
+        newTrack.setReleaseDate(LocalDate.parse(publishedAt.substring(0, 10)));
+      }
+    }
+
+    newTrack.setAlbum(null);
+
+    return trackRepository.save(newTrack);
   }
 
   public PlatformTrack searchTrack(Track track, Platform platform) {
-    String query;
-    if (track.getIsrc() != null) {
-      query = track.getTitle() + " " + track.getArtist();
-    } else {
-      query = track.getTitle() + " " + track.getArtist();
-    }
+    String query = track.getTitle() + " " + track.getArtist();
 
     Map response = webClient.get()
         .uri(uriBuilder -> uriBuilder
@@ -91,15 +116,41 @@ public class YoutubeTrackService {
         .bodyToMono(Map.class)
         .block();
 
-    var items = (java.util.List) response.get("items");
+    if (response == null) return null;
+    List items = (List) response.get("items");
     if (items == null || items.isEmpty()) return null;
 
-    var snippet = (Map) ((Map) items.get(0)).get("snippet");
-    var videoId = (String) ((Map) ((Map) items.get(0)).get("id")).get("videoId");
+    Map item = (Map) items.get(0);
+    Map idMap = (Map) item.get("id");
+    String videoId = (String) idMap.get("videoId");
+    if (videoId == null) return null;
+
+    Map snippet = (Map) item.get("snippet");
     String url = "https://music.youtube.com/watch?v=" + videoId;
     String title = (String) snippet.get("title");
     String artist = (String) snippet.get("channelTitle");
 
     return new PlatformTrack(track, platform, videoId, url, title, artist);
+  }
+
+  private String extractVideoId(String url) {
+    if (url == null || url.isBlank()) {
+      throw new RuntimeException("YouTube URL is empty");
+    }
+
+    if (url.contains("youtu.be/")) {
+      return url.split("youtu.be/")[1].split("\\?")[0];
+    }
+
+    if (url.contains("youtube.com/watch?v=") || url.contains("music.youtube.com/watch?v=")) {
+      return url.split("v=")[1].split("&")[0];
+    }
+
+    throw new RuntimeException("Not a valid YouTube URL: " + url);
+  }
+
+  private Integer parseIsoDurationToMillis(String isoDuration) {
+    long millis = Duration.parse(isoDuration).toMillis();
+    return Math.toIntExact(millis);
   }
 }

@@ -8,6 +8,6 @@ import java.util.List;
 import java.util.Optional;
 
 public interface PlatformTrackRepository extends JpaRepository<PlatformTrack, Long> {
-  Optional<PlatformTrack> findByTrackAndPlatform(Track track, Platform platform);
-  List<PlatformTrack> findByTrack(Track track);
+    Optional<PlatformTrack> findByTrackAndPlatform(Track track, Platform platform);
+    List<PlatformTrack> findByTrack(Track track);
 }
