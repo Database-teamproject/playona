@@ -13,6 +13,13 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 public class SharedLink {
 
+  public SharedLink(String shortCode, Track track, User user) {
+    this.shortCode = shortCode;
+    this.track = track;
+    this.user = user;
+    this.clickCount = 0;
+  }
+
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
@@ -51,5 +58,8 @@ public class SharedLink {
     this.shortCode = shortCode;
     this.track = track;
     this.clickCount = 0;
+  }
+  public void incrementClickCount() {
+    this.clickCount = (this.clickCount == null ? 0 : this.clickCount) + 1;
   }
 }

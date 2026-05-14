@@ -5,7 +5,10 @@ import com.playona.api.domain.user.dto.PlatformPreferenceResponse;
 import com.playona.api.domain.user.dto.UpdateUserRequest;
 import com.playona.api.domain.user.dto.UserResponse;
 import com.playona.api.domain.user.service.UserService;
+import com.playona.api.global.common.ApiResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -18,32 +21,32 @@ public class UserController {
     private final UserService userService;
 
     @GetMapping
-    public UserResponse getMyInfo(
-            @RequestHeader(value = "X-USER-ID", defaultValue = "1") Long userId
+    public ResponseEntity<ApiResponse<UserResponse>> getMyInfo(
+            @AuthenticationPrincipal String userUuid
     ) {
-        return userService.getMyInfo(userId);
+        return ResponseEntity.ok(ApiResponse.ok(userService.getMyInfoByUuid(userUuid)));
     }
 
     @PutMapping
-    public UserResponse updateMyInfo(
-            @RequestHeader(value = "X-USER-ID", defaultValue = "1") Long userId,
+    public ResponseEntity<ApiResponse<UserResponse>> updateMyInfo(
+            @AuthenticationPrincipal String userUuid,
             @RequestBody UpdateUserRequest request
     ) {
-        return userService.updateMyInfo(userId, request);
+        return ResponseEntity.ok(ApiResponse.ok(userService.updateMyInfoByUuid(userUuid, request)));
     }
 
     @GetMapping("/platforms")
-    public List<PlatformPreferenceResponse> getMyPlatforms(
-            @RequestHeader(value = "X-USER-ID", defaultValue = "1") Long userId
+    public ResponseEntity<ApiResponse<List<PlatformPreferenceResponse>>> getMyPlatforms(
+            @AuthenticationPrincipal String userUuid
     ) {
-        return userService.getMyPlatforms(userId);
+        return ResponseEntity.ok(ApiResponse.ok(userService.getMyPlatformsByUuid(userUuid)));
     }
 
     @PutMapping("/platforms")
-    public List<PlatformPreferenceResponse> updateMyPlatforms(
-            @RequestHeader(value = "X-USER-ID", defaultValue = "1") Long userId,
+    public ResponseEntity<ApiResponse<List<PlatformPreferenceResponse>>> updateMyPlatforms(
+            @AuthenticationPrincipal String userUuid,
             @RequestBody List<PlatformPreferenceRequest> requests
     ) {
-        return userService.updateMyPlatforms(userId, requests);
+        return ResponseEntity.ok(ApiResponse.ok(userService.updateMyPlatformsByUuid(userUuid, requests)));
     }
 }

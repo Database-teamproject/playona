@@ -4,7 +4,7 @@ import com.playona.api.domain.auth.entity.RefreshTokenRepository;
 import com.playona.api.domain.user.entity.User;
 import com.playona.api.domain.auth.entity.RefreshToken;
 import java.time.LocalDateTime;
-import com.playona.api.domain.user.entity.UserRepository;
+import com.playona.api.domain.user.repository.UserRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -30,8 +30,8 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
 
   @Override
   public void onAuthenticationSuccess(HttpServletRequest request,
-      HttpServletResponse response,
-      Authentication authentication) throws IOException {
+                                      HttpServletResponse response,
+                                      Authentication authentication) throws IOException {
 
     OAuth2User oAuth2User = (OAuth2User) authentication.getPrincipal();
 
@@ -53,9 +53,9 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
     }
 
     User user = userRepository.findByEmail(email)
-        .orElseGet(() -> userRepository.save(
-            new User(UUID.randomUUID().toString(), email, name, picture)
-        ));
+            .orElseGet(() -> userRepository.save(
+                    new User(UUID.randomUUID().toString(), email, name, picture)
+            ));
 
     // Access Token 발급
     String accessToken = jwtProvider.generateToken(user.getUserUuid());
@@ -64,9 +64,9 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
     String refreshToken = jwtProvider.generateRefreshToken(user.getUserUuid());
     refreshTokenRepository.deleteByUserId(user.getId());
     refreshTokenRepository.save(new RefreshToken(
-        user,
-        refreshToken,
-        LocalDateTime.now().plusSeconds(jwtProvider.getRefreshExpiration() / 1000)
+            user,
+            refreshToken,
+            LocalDateTime.now().plusSeconds(jwtProvider.getRefreshExpiration() / 1000)
     ));
 
     String targetUrl = redirectUrl + "?token=" + accessToken + "&refresh=" + refreshToken;

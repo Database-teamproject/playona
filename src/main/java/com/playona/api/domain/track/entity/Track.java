@@ -3,18 +3,25 @@ package com.playona.api.domain.track.entity;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
+
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "tracks")
 @Getter
+@Setter
 @NoArgsConstructor
 public class Track {
 
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
+
+  @Column(name = "track_uuid", unique = true, nullable = false)
+  private String trackUuid;
 
   @Column(nullable = true)
   private String isrc;
@@ -42,11 +49,29 @@ public class Track {
   @Column(name = "updated_at")
   private LocalDateTime updatedAt;
 
-  @Column(name = "source_url")
+  @Column(name = "source_url", unique = true)
   private String sourceUrl;
+
+  public Track(String title, String artist, String thumbnailUrl, String sourceUrl) {
+    this.title = title;
+    this.artist = artist;
+    this.thumbnailUrl = thumbnailUrl;
+    this.sourceUrl = sourceUrl;
+  }
+
+  public Track(String title, String artist, String thumbnailUrl, String sourceUrl, String isrc) {
+    this.title = title;
+    this.artist = artist;
+    this.thumbnailUrl = thumbnailUrl;
+    this.sourceUrl = sourceUrl;
+    this.isrc = isrc;
+  }
 
   @PrePersist
   protected void onCreate() {
+    if (trackUuid == null) {
+      trackUuid = UUID.randomUUID().toString();
+    }
     createdAt = LocalDateTime.now();
     updatedAt = LocalDateTime.now();
   }
@@ -54,12 +79,5 @@ public class Track {
   @PreUpdate
   protected void onUpdate() {
     updatedAt = LocalDateTime.now();
-  }
-  // 기존 생성자 교체
-  public Track(String title, String artist, String thumbnailUrl, String sourceUrl) {
-    this.title = title;
-    this.artist = artist;
-    this.thumbnailUrl = thumbnailUrl;
-    this.sourceUrl = sourceUrl;
   }
 }
