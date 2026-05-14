@@ -34,6 +34,7 @@ services:
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       APP_BASE_URL: https://playona-five.vercel.app
+      OAUTH2_REDIRECT_URL: https://playona-five.vercel.app/auth/callback
     depends_on:
       db:
         condition: service_healthy
