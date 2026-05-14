@@ -93,15 +93,19 @@ public class LinkService {
     }
 
     @Transactional
+    public void incrementClickCount(String shortCode) {
+        SharedLink sharedLink = sharedLinkRepository.findByShortCode(shortCode)
+            .orElseThrow(() -> new RuntimeException("링크를 찾을 수 없습니다: " + shortCode));
+        sharedLink.incrementClickCount();
+        sharedLinkRepository.save(sharedLink);
+    }
+
+    @Transactional
     public String getRedirectUrl(String shortCode, String userUuid) {
         SharedLink sharedLink = sharedLinkRepository.findByShortCode(shortCode)
             .orElseThrow(() -> new RuntimeException("링크를 찾을 수 없습니다: " + shortCode));
         sharedLink.incrementClickCount();
         sharedLinkRepository.save(sharedLink);
-
-        if (userUuid == null) {
-            return sharedLink.getTrack().getSourceUrl();
-        }
 
         User user = userRepository.findByUserUuid(userUuid).orElse(null);
         if (user != null) {

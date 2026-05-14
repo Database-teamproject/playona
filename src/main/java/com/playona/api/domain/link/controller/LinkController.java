@@ -50,7 +50,11 @@ public class LinkController {
   @GetMapping("/{shortCode}/redirect")
   public ResponseEntity<?> redirect(@PathVariable String shortCode,
       @AuthenticationPrincipal String userUuid) {
-    String url = linkService  .getRedirectUrl(shortCode, userUuid);
+    if (userUuid == null) {
+      linkService.incrementClickCount(shortCode);
+      return ResponseEntity.ok(ApiResponse.ok(linkService.getPlatformUrls(shortCode)));
+    }
+    String url = linkService.getRedirectUrl(shortCode, userUuid);
     return ResponseEntity.status(302)
         .header("Location", url)
         .build();
