@@ -6,6 +6,7 @@ import com.playona.api.domain.link.entity.SharedLinkRepository;
 import com.playona.api.domain.platform.entity.PlatformTrack;
 import com.playona.api.domain.platform.repository.PlatformTrackRepository;
 import com.playona.api.domain.track.entity.Track;
+import com.playona.api.domain.track.service.AppleTrackService;
 import com.playona.api.domain.track.service.SpotifyTrackService;
 import com.playona.api.domain.track.service.TrackMatchingService;
 import com.playona.api.domain.track.service.YoutubeTrackService;
@@ -33,6 +34,7 @@ public class LinkService {
     private String baseUrl;
 
     private final UserRepository userRepository;
+    private final AppleTrackService appleTrackService;
     private final YoutubeTrackService youtubeTrackService;
     private final SpotifyTrackService spotifyTrackService;
     private final SharedLinkRepository sharedLinkRepository;
@@ -69,10 +71,12 @@ public class LinkService {
     private Track findOrCreateTrack(String url) {
         if (url.contains("spotify.com")) {
             return spotifyTrackService.getTrackFromUrl(url);
-        } else if (url.contains("youtube.com") || url.contains("youtu.be") || url.contains("music.youtube.com")) {
+        } else if (url.contains("youtube.com") || url.contains("youtu.be")) {
             return youtubeTrackService.getTrackFromUrl(url);
+        } else if (url.contains("music.apple.com")) {
+            return appleTrackService.getTrackFromUrl(url);
         }
-        throw new IllegalArgumentException("지원하지 않는 플랫폼 URL입니다: " + url);
+        throw new IllegalArgumentException("지원하지 않는 플랫폼 URL입니다. (지원: Spotify, YouTube, Apple Music)");
     }
 
     private String generateShortCode() {
