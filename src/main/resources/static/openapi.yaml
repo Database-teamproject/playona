@@ -374,21 +374,29 @@ paths:
 
   # ========== 트랙 ==========
   /api/tracks/resolve:
-    get:
+    post:
       tags: [트랙]
-      summary: URL로 곡 정보 조회
-      parameters:
-        - name: url
-          in: query
-          required: true
-          schema:
-            type: string
-            example: https://open.spotify.com/track/abc123
+      summary: URL로 곡 정보 조회 및 플랫폼 매칭 (인증 필요)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url:
+                  type: string
+                  example: https://open.spotify.com/track/abc123
       responses:
         '200':
           description: 조회 성공
         '400':
           description: 지원하지 않는 URL 형식
+        '401':
+          description: 인증 필요
 
   /api/tracks/{trackId}:
     get:
@@ -502,11 +510,12 @@ paths:
   /api/links/{shortCode}/redirect:
     get:
       tags: [공유링크]
-      summary: 선호 플랫폼으로 리디렉션
+      summary: 선호 플랫폼 URL 반환
       description: |
-        로그인 유저의 선호 플랫폼 순서대로 매칭된 URL로 리디렉션합니다.
-        - 로그인 유저: 설정된 선호 플랫폼 1순위부터 매칭된 플랫폼으로 자동 리디렉션
-        - 비로그인 유저: GET /api/links/{shortCode}/platforms 를 통해 플랫폼 선택 후 직접 이동
+        로그인 유저의 선호 플랫폼에 맞는 URL을 JSON으로 반환합니다.
+        프론트엔드가 받아서 window.location.href 로 이동해야 합니다.
+        - 로그인 유저: { "url": "https://open.spotify.com/..." } 반환
+        - 비로그인 유저: 플랫폼 목록 배열 반환 (GET /api/links/{shortCode}/platforms 와 동일)
       security:
         - bearerAuth: []
         - {}
@@ -518,8 +527,10 @@ paths:
             type: string
             example: abc123
       responses:
-        '302':
-          description: 플랫폼 URL로 리디렉션
+        '200':
+          description: |
+            로그인 시 → { "success": true, "data": { "url": "https://..." } }
+            비로그인 시 → { "success": true, "data": [ { "slug": "spotify", ... } ] }
         '404':
           description: 링크 없음
 

@@ -8,6 +8,8 @@ import com.playona.api.domain.track.entity.Track;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -16,41 +18,43 @@ import java.util.List;
 @RequiredArgsConstructor
 public class TrackMatchingService {
 
-  private final PlatformRepository platformRepository;
-  private final PlatformTrackRepository platformTrackRepository;
-  private final SpotifyTrackService spotifyTrackService;
-  private final YoutubeTrackService youtubeTrackService;
-  private final AppleTrackService appleTrackService;
+    private final PlatformRepository platformRepository;
+    private final PlatformTrackRepository platformTrackRepository;
+    private final SpotifyTrackService spotifyTrackService;
+    private final YoutubeTrackService youtubeTrackService;
+    private final AppleTrackService appleTrackService;
 
-  public List<PlatformTrack> matchAll(Track track) {
-    List<Platform> platforms = platformRepository.findByIsActiveTrue();
+    // REQUIRES_NEW: 호출자(createLink)의 트랜잭션과 독립적으로 실행
+    // 플랫폼 매칭 실패 시 createLink 전체가 롤백되는 것을 방지
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public List<PlatformTrack> matchAll(Track track) {
+        List<Platform> platforms = platformRepository.findByIsActiveTrue();
 
-    for (Platform platform : platforms) {
-      // 이미 매칭된 플랫폼은 스킵
-      if (platformTrackRepository.findByTrackAndPlatform(track, platform).isPresent()) {
-        continue;
-      }
+        for (Platform platform : platforms) {
+            if (platformTrackRepository.findByTrackAndPlatform(track, platform).isPresent()) {
+                continue;
+            }
 
-      try {
-        PlatformTrack platformTrack = matchToPlatform(track, platform);
-        if (platformTrack != null) {
-          platformTrackRepository.save(platformTrack);
+            try {
+                PlatformTrack platformTrack = matchToPlatform(track, platform);
+                if (platformTrack != null) {
+                    platformTrackRepository.save(platformTrack);
+                }
+            } catch (Exception e) {
+                log.warn("플랫폼 매칭 실패 - platform: {}, track: {}, error: {}",
+                        platform.getSlug(), track.getTitle(), e.getMessage());
+            }
         }
-      } catch (Exception e) {
-        log.warn("플랫폼 매칭 실패 - platform: {}, track: {}, error: {}",
-            platform.getSlug(), track.getTitle(), e.getMessage());
-      }
+
+        return platformTrackRepository.findByTrack(track);
     }
 
-    return platformTrackRepository.findByTrack(track);
-  }
-
-  private PlatformTrack matchToPlatform(Track track, Platform platform) {
-    return switch (platform.getSlug()) {
-      case "spotify" -> spotifyTrackService.searchTrack(track, platform);
-      case "ytmusic" -> youtubeTrackService.searchTrack(track, platform);
-      case "apple" -> appleTrackService.searchTrack(track, platform);
-      default -> null;
-    };
-  }
+    private PlatformTrack matchToPlatform(Track track, Platform platform) {
+        return switch (platform.getSlug()) {
+            case "spotify" -> spotifyTrackService.searchTrack(track, platform);
+            case "ytmusic" -> youtubeTrackService.searchTrack(track, platform);
+            case "apple" -> appleTrackService.searchTrack(track, platform);
+            default -> null;
+        };
+    }
 }

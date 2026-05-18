@@ -4,6 +4,8 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -58,11 +60,21 @@ public class JwtProvider {
     return refreshExpiration;
   }
 
-  // 토큰 유효성 검증
+  // Access Token 전용 유효성 검증 (type=access 확인)
   public boolean validateToken(String token) {
     try {
-      getClaims(token);
-      return true;
+      Claims claims = getClaims(token);
+      return "access".equals(claims.get("type", String.class));
+    } catch (JwtException | IllegalArgumentException e) {
+      return false;
+    }
+  }
+
+  // Refresh Token 전용 유효성 검증 (type=refresh 확인)
+  public boolean validateRefreshToken(String token) {
+    try {
+      Claims claims = getClaims(token);
+      return "refresh".equals(claims.get("type", String.class));
     } catch (JwtException | IllegalArgumentException e) {
       return false;
     }

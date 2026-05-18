@@ -6,6 +6,8 @@ import com.playona.api.domain.link.entity.SharedLinkRepository;
 import com.playona.api.domain.platform.entity.PlatformTrack;
 import com.playona.api.domain.platform.repository.PlatformTrackRepository;
 import com.playona.api.domain.track.entity.Track;
+import com.playona.api.global.exception.NotFoundException;
+import com.playona.api.domain.track.service.AppleTrackService;
 import com.playona.api.domain.track.service.SpotifyTrackService;
 import com.playona.api.domain.track.service.TrackMatchingService;
 import com.playona.api.domain.track.service.YoutubeTrackService;
@@ -33,6 +35,7 @@ public class LinkService {
     private String baseUrl;
 
     private final UserRepository userRepository;
+    private final AppleTrackService appleTrackService;
     private final YoutubeTrackService youtubeTrackService;
     private final SpotifyTrackService spotifyTrackService;
     private final SharedLinkRepository sharedLinkRepository;
@@ -69,10 +72,12 @@ public class LinkService {
     private Track findOrCreateTrack(String url) {
         if (url.contains("spotify.com")) {
             return spotifyTrackService.getTrackFromUrl(url);
-        } else if (url.contains("youtube.com") || url.contains("youtu.be") || url.contains("music.youtube.com")) {
+        } else if (url.contains("youtube.com") || url.contains("youtu.be")) {
             return youtubeTrackService.getTrackFromUrl(url);
+        } else if (url.contains("music.apple.com")) {
+            return appleTrackService.getTrackFromUrl(url);
         }
-        throw new IllegalArgumentException("지원하지 않는 플랫폼 URL입니다: " + url);
+        throw new IllegalArgumentException("지원하지 않는 플랫폼 URL입니다. (지원: Spotify, YouTube, Apple Music)");
     }
 
     private String generateShortCode() {
@@ -83,21 +88,32 @@ public class LinkService {
         return code;
     }
 
+    @Transactional(readOnly = true)
     public SharedLink getLink(String shortCode) {
         return sharedLinkRepository.findByShortCode(shortCode)
-            .orElseThrow(() -> new RuntimeException("링크를 찾을 수 없습니다: " + shortCode));
+            .orElseThrow(() -> new NotFoundException("링크를 찾을 수 없습니다: " + shortCode));
+    }
+
+    @Transactional(readOnly = true)
+    public LinkResponse getLinkResponse(String shortCode) {
+        SharedLink sharedLink = getLink(shortCode);
+        return new LinkResponse(sharedLink, baseUrl, platformTrackRepository.findByTrack(sharedLink.getTrack()));
+    }
+
+    @Transactional
+    public void incrementClickCount(String shortCode) {
+        SharedLink sharedLink = sharedLinkRepository.findByShortCode(shortCode)
+            .orElseThrow(() -> new NotFoundException("링크를 찾을 수 없습니다: " + shortCode));
+        sharedLink.incrementClickCount();
+        sharedLinkRepository.save(sharedLink);
     }
 
     @Transactional
     public String getRedirectUrl(String shortCode, String userUuid) {
         SharedLink sharedLink = sharedLinkRepository.findByShortCode(shortCode)
-            .orElseThrow(() -> new RuntimeException("링크를 찾을 수 없습니다: " + shortCode));
+            .orElseThrow(() -> new NotFoundException("링크를 찾을 수 없습니다: " + shortCode));
         sharedLink.incrementClickCount();
         sharedLinkRepository.save(sharedLink);
-
-        if (userUuid == null) {
-            return sharedLink.getTrack().getSourceUrl();
-        }
 
         User user = userRepository.findByUserUuid(userUuid).orElse(null);
         if (user != null) {
@@ -119,9 +135,10 @@ public class LinkService {
         return sharedLink.getTrack().getSourceUrl();
     }
 
+    @Transactional(readOnly = true)
     public List<Map<String, String>> getPlatformUrls(String shortCode) {
         SharedLink sharedLink = sharedLinkRepository.findByShortCode(shortCode)
-            .orElseThrow(() -> new RuntimeException("링크를 찾을 수 없습니다: " + shortCode));
+            .orElseThrow(() -> new NotFoundException("링크를 찾을 수 없습니다: " + shortCode));
 
         return platformTrackRepository.findByTrack(sharedLink.getTrack()).stream()
             .map(pt -> Map.of(
@@ -132,6 +149,7 @@ public class LinkService {
             .toList();
     }
 
+    @Transactional(readOnly = true)
     public List<LinkResponse> getMyLinks(String userUuid) {
         return userRepository.findByUserUuid(userUuid)
             .map(user -> sharedLinkRepository.findByUserOrderByCreatedAtDesc(user)

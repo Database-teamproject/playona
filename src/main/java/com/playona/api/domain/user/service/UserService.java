@@ -59,43 +59,43 @@ public class UserService {
         preferenceRepository.deleteByUser(user);
 
         requests.stream()
-            .sorted(Comparator.comparingInt(PlatformPreferenceRequest::getPriority))
-            .forEach(request -> {
-                Platform platform = platformRepository.findById(request.getPlatformId())
-                    .orElseThrow(() -> new IllegalArgumentException("Platform not found: " + request.getPlatformId()));
-                preferenceRepository.save(UserPlatformPreference.builder()
-                    .user(user)
-                    .platform(platform)
-                    .priority(request.getPriority())
-                    .build());
-            });
+                .sorted(Comparator.comparingInt(PlatformPreferenceRequest::getPriority))
+                .forEach(request -> {
+                    Platform platform = platformRepository.findById(request.getPlatformId())
+                            .orElseThrow(() -> new IllegalArgumentException("Platform not found: " + request.getPlatformId()));
+                    preferenceRepository.save(UserPlatformPreference.builder()
+                            .user(user)
+                            .platform(platform)
+                            .priority(request.getPriority())
+                            .build());
+                });
 
         return toPlatformPreferenceResponses(user);
     }
 
     private List<PlatformPreferenceResponse> toPlatformPreferenceResponses(User user) {
         return preferenceRepository.findByUserOrderByPriorityAsc(user)
-            .stream()
-            .map(pref -> PlatformPreferenceResponse.builder()
-                .platformId(pref.getPlatform().getId())
-                .platformName(pref.getPlatform().getName())
-                .priority(pref.getPriority())
-                .build())
-            .toList();
+                .stream()
+                .map(pref -> PlatformPreferenceResponse.builder()
+                        .platformId(pref.getPlatform().getId())
+                        .platformName(pref.getPlatform().getName())
+                        .priority(pref.getPriority())
+                        .build())
+                .toList();
     }
 
     private UserResponse toUserResponse(User user) {
         return UserResponse.builder()
-            .userUuid(user.getUserUuid())
-            .email(user.getEmail())
-            .nickname(user.getNickname())
-            .profileImageUrl(user.getProfileImageUrl())
-            .createdAt(user.getCreatedAt())
-            .build();
+                .userUuid(user.getUserUuid())
+                .email(user.getEmail())
+                .nickname(user.getNickname())
+                .profileImageUrl(user.getProfileImageUrl())
+                .createdAt(user.getCreatedAt())
+                .build();
     }
 
     private User getUserByUuidOrThrow(String userUuid) {
         return userRepository.findByUserUuid(userUuid)
-            .orElseThrow(() -> new IllegalArgumentException("User not found: " + userUuid));
+                .orElseThrow(() -> new IllegalArgumentException("User not found: " + userUuid));
     }
 }
