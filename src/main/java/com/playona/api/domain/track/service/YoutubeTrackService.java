@@ -122,10 +122,12 @@ public class YoutubeTrackService {
 
     Map item = (Map) items.get(0);
     Map idMap = (Map) item.get("id");
+    if (idMap == null) return null;
     String videoId = (String) idMap.get("videoId");
     if (videoId == null) return null;
 
     Map snippet = (Map) item.get("snippet");
+    if (snippet == null) return null;
     String url = "https://music.youtube.com/watch?v=" + videoId;
     String title = (String) snippet.get("title");
     String artist = (String) snippet.get("channelTitle");
@@ -151,6 +153,7 @@ public class YoutubeTrackService {
 
   private Integer parseIsoDurationToMillis(String isoDuration) {
     long millis = Duration.parse(isoDuration).toMillis();
-    return Math.toIntExact(millis);
+    // Integer 범위 초과 시 (약 24.8일 이상) 최대값으로 cap
+    return millis > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) millis;
   }
 }

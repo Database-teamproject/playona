@@ -8,6 +8,8 @@ import com.playona.api.domain.track.entity.Track;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -22,6 +24,9 @@ public class TrackMatchingService {
     private final YoutubeTrackService youtubeTrackService;
     private final AppleTrackService appleTrackService;
 
+    // REQUIRES_NEW: 호출자(createLink)의 트랜잭션과 독립적으로 실행
+    // 플랫폼 매칭 실패 시 createLink 전체가 롤백되는 것을 방지
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public List<PlatformTrack> matchAll(Track track) {
         List<Platform> platforms = platformRepository.findByIsActiveTrue();
 

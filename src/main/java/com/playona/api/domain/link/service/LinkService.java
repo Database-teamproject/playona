@@ -88,11 +88,13 @@ public class LinkService {
         return code;
     }
 
+    @Transactional(readOnly = true)
     public SharedLink getLink(String shortCode) {
         return sharedLinkRepository.findByShortCode(shortCode)
             .orElseThrow(() -> new NotFoundException("링크를 찾을 수 없습니다: " + shortCode));
     }
 
+    @Transactional(readOnly = true)
     public LinkResponse getLinkResponse(String shortCode) {
         SharedLink sharedLink = getLink(shortCode);
         return new LinkResponse(sharedLink, baseUrl, platformTrackRepository.findByTrack(sharedLink.getTrack()));
@@ -133,6 +135,7 @@ public class LinkService {
         return sharedLink.getTrack().getSourceUrl();
     }
 
+    @Transactional(readOnly = true)
     public List<Map<String, String>> getPlatformUrls(String shortCode) {
         SharedLink sharedLink = sharedLinkRepository.findByShortCode(shortCode)
             .orElseThrow(() -> new NotFoundException("링크를 찾을 수 없습니다: " + shortCode));
@@ -146,6 +149,7 @@ public class LinkService {
             .toList();
     }
 
+    @Transactional(readOnly = true)
     public List<LinkResponse> getMyLinks(String userUuid) {
         return userRepository.findByUserUuid(userUuid)
             .map(user -> sharedLinkRepository.findByUserOrderByCreatedAtDesc(user)

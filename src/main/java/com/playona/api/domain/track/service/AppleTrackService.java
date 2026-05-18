@@ -7,6 +7,7 @@ import com.playona.api.domain.track.entity.Track;
 import com.playona.api.domain.track.repository.TrackRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import java.net.URLEncoder;
@@ -22,6 +23,7 @@ public class AppleTrackService {
   private final TrackRepository trackRepository;
   private final ObjectMapper objectMapper = new ObjectMapper();
 
+  @Transactional
   public Track getTrackFromUrl(String url) {
     String trackId = extractTrackId(url);
 
@@ -147,7 +149,9 @@ public class AppleTrackService {
 
     Map item = (Map) results.get(0);
 
-    String trackId = String.valueOf(item.get("trackId"));
+    // item.get("trackId")는 Integer — String.valueOf(null)은 "null"을 반환하므로 명시적 변환
+    Object rawTrackId = item.get("trackId");
+    String trackId = rawTrackId != null ? String.valueOf(rawTrackId) : null;
     String url = (String) item.get("trackViewUrl");
     String title = (String) item.get("trackName");
     String artist = (String) item.get("artistName");
@@ -171,7 +175,8 @@ public class AppleTrackService {
 
     Map item = (Map) results.get(0);
 
-    String trackId = String.valueOf(item.get("trackId"));
+    Object rawTrackId = item.get("trackId");
+    String trackId = rawTrackId != null ? String.valueOf(rawTrackId) : null;
     String url = (String) item.get("trackViewUrl");
     String title = (String) item.get("trackName");
     String artist = (String) item.get("artistName");

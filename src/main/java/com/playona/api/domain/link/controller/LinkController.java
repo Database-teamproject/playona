@@ -20,6 +20,9 @@ public class LinkController {
   @PostMapping
   public ResponseEntity<ApiResponse<LinkResponse>> createLink(@RequestBody Map<String, String> body) {
     String url = body.get("url");
+    if (url == null || url.isBlank()) {
+      return ResponseEntity.badRequest().body(ApiResponse.fail("url은 필수입니다."));
+    }
     return ResponseEntity.ok(ApiResponse.ok(linkService.createLink(url)));
   }
 
@@ -38,16 +41,16 @@ public class LinkController {
     return ResponseEntity.ok(ApiResponse.ok(linkService.getPlatformUrls(shortCode)));
   }
 
+  // 302 대신 JSON으로 URL 반환 — SPA에서 fetch()는 redirect를 자동으로 따라가므로
+  // 목적지 URL을 알 수 없게 됨. 프론트가 받아서 window.location.href로 이동.
   @GetMapping("/{shortCode}/redirect")
-  public ResponseEntity<?> redirect(@PathVariable String shortCode,
+  public ResponseEntity<ApiResponse<?>> redirect(@PathVariable String shortCode,
       @AuthenticationPrincipal String userUuid) {
     if (userUuid == null) {
       linkService.incrementClickCount(shortCode);
       return ResponseEntity.ok(ApiResponse.ok(linkService.getPlatformUrls(shortCode)));
     }
     String url = linkService.getRedirectUrl(shortCode, userUuid);
-    return ResponseEntity.status(302)
-        .header("Location", url)
-        .build();
+    return ResponseEntity.ok(ApiResponse.ok(Map.of("url", url)));
   }
 }

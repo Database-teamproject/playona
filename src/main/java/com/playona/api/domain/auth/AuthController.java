@@ -24,6 +24,13 @@ public class AuthController {
   @PostMapping("/refresh")
   public ResponseEntity<ApiResponse<?>> refresh(@RequestBody Map<String, String> body) {
     String refreshToken = body.get("refreshToken");
+    if (refreshToken == null || refreshToken.isBlank()) {
+      return ResponseEntity.badRequest().body(ApiResponse.fail("refreshToken은 필수입니다."));
+    }
+    // JWT 서명·만료·타입 검증을 DB 조회 전에 먼저 수행
+    if (!jwtProvider.validateRefreshToken(refreshToken)) {
+      return ResponseEntity.badRequest().body(ApiResponse.fail("유효하지 않은 Refresh Token입니다."));
+    }
 
     RefreshToken token = refreshTokenRepository.findByToken(refreshToken)
             .orElseThrow(() -> new IllegalArgumentException("유효하지 않은 Refresh Token입니다."));
@@ -51,13 +58,14 @@ public class AuthController {
     )));
   }
 
+  @Transactional
   @PostMapping("/logout")
   public ResponseEntity<ApiResponse<?>> logout(@RequestBody Map<String, String> body) {
     String refreshToken = body.get("refreshToken");
-
-    refreshTokenRepository.findByToken(refreshToken)
-            .ifPresent(refreshTokenRepository::delete);
-
+    if (refreshToken != null && !refreshToken.isBlank()) {
+      refreshTokenRepository.findByToken(refreshToken)
+              .ifPresent(refreshTokenRepository::delete);
+    }
     return ResponseEntity.ok(ApiResponse.ok(Map.of("message", "로그아웃 되었습니다.")));
   }
 }

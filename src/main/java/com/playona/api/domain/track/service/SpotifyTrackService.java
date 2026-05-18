@@ -7,6 +7,7 @@ import com.playona.api.domain.track.repository.TrackRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import se.michaelthelin.spotify.SpotifyApi;
 import se.michaelthelin.spotify.model_objects.credentials.ClientCredentials;
 import se.michaelthelin.spotify.model_objects.specification.ArtistSimplified;
@@ -28,6 +29,7 @@ public class SpotifyTrackService {
 
     private final TrackRepository trackRepository;
 
+    @Transactional
     public Track getTrackFromUrl(String url) {
         String trackId = extractTrackId(url);
 
@@ -106,6 +108,7 @@ public class SpotifyTrackService {
         throw new IllegalArgumentException("Not a valid Spotify URL: " + url);
     }
 
+    @Transactional
     public PlatformTrack searchTrack(Track track, Platform platform) {
         SpotifyApi spotifyApi = new SpotifyApi.Builder()
                 .setClientId(clientId)
