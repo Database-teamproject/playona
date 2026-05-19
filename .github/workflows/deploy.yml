@@ -6,8 +6,9 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: 코드 체크아웃
+      - name: code checkout
         uses: actions/checkout@v3
+
       - name: EC2에 배포
         uses: appleboy/ssh-action@master
         with:
@@ -15,14 +16,27 @@ jobs:
           username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
+            # 1. 프로젝트 디렉토리로 이동 후 최신 코드 pull
             cd ~/app
+            git pull origin dev
+            
+            # 2. GitHub Secrets 기반으로 완벽한 .env 파일 생성 (첫 줄은 >, 이후는 >>)
             echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" > .env
             echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> .env
             echo "SPOTIFY_CLIENT_ID=${{ secrets.SPOTIFY_CLIENT_ID }}" >> .env
             echo "SPOTIFY_CLIENT_SECRET=${{ secrets.SPOTIFY_CLIENT_SECRET }}" >> .env
             echo "YOUTUBE_API_KEY=${{ secrets.YOUTUBE_API_KEY }}" >> .env
             echo "APP_BASE_URL=${{ secrets.APP_BASE_URL }}" >> .env
-            git pull origin dev
-            docker-compose down
+            echo "OAUTH2_REDIRECT_URL=${{ secrets.OAUTH2_REDIRECT_URL }}" >> .env
+            
+            # 💡 [누락되었던 카카오 & 구글 키 추가]
+            echo "KAKAO_CLIENT_ID=${{ secrets.KAKAO_CLIENT_ID }}" >> .env
+            echo "KAKAO_CLIENT_SECRET=${{ secrets.KAKAO_CLIENT_SECRET }}" >> .env
+            echo "GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}" >> .env
+            echo "GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}" >> .env
+
+            # 3. DB는 건드리지 않고, 변경된 스프링 앱(app) 위주로만 빌드 및 컨테이너 교체
             docker-compose up -d --build
+
+            # 4. 빌드 후 남은 이전 버전의 불필요한 미태그 이미지(중간 레이어) 청소
             docker image prune -f

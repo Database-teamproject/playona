@@ -85,7 +85,9 @@ public class SecurityConfig {
     CorsConfiguration config = new CorsConfiguration();
     config.setAllowedOrigins(List.of(
         "http://localhost:3000",
-        "https://playona-five.vercel.app"  // trailing slash 제거
+        "https://playona-five.vercel.app",
+        "http://localhost:8080",
+        "http://localhost:5173"// trailing slash 제거
     ));
     config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
     config.setAllowedHeaders(List.of("*"));
