@@ -123,16 +123,13 @@ public class AppleTrackService {
 
   public PlatformTrack searchTrack(Track track, Platform platform) {
     try {
-      // 1. ISRC first
-      if (track.getIsrc() != null && !track.getIsrc().isBlank()) {
-        PlatformTrack byIsrc = searchAppleByIsrc(track, platform, track.getIsrc());
-        if (byIsrc != null) {
-          return byIsrc;
-        }
+      // ISRC 없으면 매칭 불가 — 오매칭 방지
+      if (track.getIsrc() == null || track.getIsrc().isBlank()) {
+        return null;
       }
 
-      // 2. fallback: title + artist
-      return searchAppleByTitleArtist(track, platform);
+      // ISRC 기반 매칭
+      return searchAppleByIsrc(track, platform, track.getIsrc());
 
     } catch (Exception e) {
       throw new RuntimeException("Apple search failed: " + e.getMessage(), e);
@@ -184,25 +181,7 @@ public class AppleTrackService {
 
     if (trackId == null || url == null) return null;
 
-    // 검색 결과가 원곡과 너무 다르면 매칭 거부 (오매칭 방지)
-    if (!isSimilarEnough(track.getTitle(), title)) return null;
-
     return new PlatformTrack(track, platform, trackId, url, title, artist);
-  }
-
-  /**
-   * 두 제목의 유사도를 간단히 검사: 한쪽이 다른 쪽을 포함하거나 첫 단어가 일치하면 OK.
-   */
-  private boolean isSimilarEnough(String original, String result) {
-    if (original == null || result == null) return false;
-    String a = original.toLowerCase().replaceAll("[^a-z0-9가-힣]", "");
-    String b = result.toLowerCase().replaceAll("[^a-z0-9가-힣]", "");
-    if (a.isEmpty() || b.isEmpty()) return false;
-    // 한쪽이 다른 쪽을 포함하면 OK
-    if (a.contains(b) || b.contains(a)) return true;
-    // 앞 4글자 이상 일치하면 OK
-    int common = Math.min(Math.min(a.length(), b.length()), 4);
-    return a.substring(0, common).equals(b.substring(0, common));
   }
 
   private Map getAppleResponseAsMap(String url, String errorMessage) {
