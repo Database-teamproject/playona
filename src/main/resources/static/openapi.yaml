@@ -175,10 +175,21 @@ paths:
       summary: 카카오 로그인
       description: |
         카카오 OAuth2 로그인 페이지로 리다이렉트합니다.
-        로그인 성공 시 `{OAUTH2_REDIRECT_URL}?token={accessToken}&refresh={refreshToken}` 으로 리다이렉트됩니다.
+
+        로그인 성공 시 `{OAUTH2_REDIRECT_URL}#access={accessToken}&refresh={refreshToken}` 으로 리다이렉트됩니다.
+
+        > ⚠️ **Swagger "Try it out" 사용 불가**
+        >
+        > 이 엔드포인트는 HTTP 302 리다이렉트로 동작하며, 외부 OAuth 제공자(카카오)로 브라우저를 이동시킵니다.
+        > `fetch()` / XMLHttpRequest 방식으로는 호출할 수 없습니다.
+        >
+        > **테스트 방법:** 브라우저 주소창에 직접 입력하거나, 프론트엔드에서 `window.location.href`로 이동하세요.
+        >
+        > - 로컬: `http://localhost:8080/oauth2/authorization/kakao`
+        > - 운영: `https://api.playona.io/oauth2/authorization/kakao`
       responses:
         '302':
-          description: 카카오 로그인 페이지로 리다이렉트
+          description: 카카오 OAuth2 로그인 페이지로 리다이렉트 (브라우저 직접 접속 필요)
 
   /oauth2/authorization/google:
     get:
@@ -186,10 +197,21 @@ paths:
       summary: 구글 로그인
       description: |
         구글 OAuth2 로그인 페이지로 리다이렉트합니다.
-        로그인 성공 시 `{OAUTH2_REDIRECT_URL}?token={accessToken}&refresh={refreshToken}` 으로 리다이렉트됩니다.
+
+        로그인 성공 시 `{OAUTH2_REDIRECT_URL}#access={accessToken}&refresh={refreshToken}` 으로 리다이렉트됩니다.
+
+        > ⚠️ **Swagger "Try it out" 사용 불가**
+        >
+        > 이 엔드포인트는 HTTP 302 리다이렉트로 동작하며, 외부 OAuth 제공자(구글)로 브라우저를 이동시킵니다.
+        > `fetch()` / XMLHttpRequest 방식으로는 호출할 수 없습니다.
+        >
+        > **테스트 방법:** 브라우저 주소창에 직접 입력하거나, 프론트엔드에서 `window.location.href`로 이동하세요.
+        >
+        > - 로컬: `http://localhost:8080/oauth2/authorization/google`
+        > - 운영: `https://api.playona.io/oauth2/authorization/google`
       responses:
         '302':
-          description: 구글 로그인 페이지로 리다이렉트
+          description: 구글 OAuth2 로그인 페이지로 리다이렉트 (브라우저 직접 접속 필요)
 
   /api/auth/refresh:
     post:
