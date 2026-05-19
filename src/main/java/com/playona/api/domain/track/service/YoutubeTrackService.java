@@ -159,7 +159,10 @@ public class YoutubeTrackService {
         .replaceAll("(?i)\\s*[\\-|]?\\s*music\\s+video\\s*", " ")
         .replaceAll("(?i)\\s*[\\-|]?\\s*lyric(s)?\\s+(video\\s*)?", " ")
         .replaceAll("(?i)\\s*[\\-|]?\\s*\\bMV\\b\\s*", " ")
-        .replaceAll("(?i)\\s*[\\-|]?\\s*\\(live[^)]*\\)\\s*", " ")
+        .replaceAll("(?i)\\s*\\(live[^)]*\\)\\s*", " ")
+        .replaceAll("(?i)\\s*\\([^)]*ver\\.?[^)]*\\)\\s*", " ")   // (Hyperpop ver.) 등
+        .replaceAll("(?i)\\s*\\([^)]*버전[^)]*\\)\\s*", " ")       // (하이퍼팝 버전) 등
+        .replaceAll("\\s*\\([가-힣]+\\)\\s*", " ")                  // (몰리얌) 같은 한글 괄호
         .trim();
 
     // 3. 제목 앞 아티스트명 중복 제거 ("Mrs. GREEN APPLE - lulu." → "lulu.")
