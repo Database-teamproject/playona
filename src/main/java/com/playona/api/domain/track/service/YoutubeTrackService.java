@@ -58,8 +58,9 @@ public class YoutubeTrackService {
     Map snippet = (Map) firstItem.get("snippet");
     Map contentDetails = (Map) firstItem.get("contentDetails");
 
-    String title = snippet != null ? (String) snippet.get("title") : null;
+    String rawTitle = snippet != null ? (String) snippet.get("title") : null;
     String artist = snippet != null ? (String) snippet.get("channelTitle") : null;
+    String title = cleanTitle(rawTitle, artist);
 
     String thumbnail = null;
     if (snippet != null) {
@@ -134,6 +135,44 @@ public class YoutubeTrackService {
     String artist = (String) snippet.get("channelTitle");
 
     return new PlatformTrack(track, platform, videoId, url, title, artist);
+  }
+
+  /**
+   * YouTube 영상 제목에서 실제 곡명 추출.
+   * 예) "Mrs. GREEN APPLE「lulu.」Official Music Video" → "lulu."
+   */
+  private String cleanTitle(String title, String artist) {
+    if (title == null) return null;
+
+    // 1. 일본어/한국어 꺾쇠 괄호 안 내용 추출 「lulu.」→ lulu.
+    java.util.regex.Matcher bracketMatcher =
+        java.util.regex.Pattern.compile("[「『【〔\\[]([^」』】〕\\]]+)[」』】〕\\]]").matcher(title);
+    if (bracketMatcher.find()) {
+      return bracketMatcher.group(1).trim();
+    }
+
+    // 2. 흔한 영상 키워드 제거 (대소문자 무시)
+    String cleaned = title
+        .replaceAll("(?i)\\s*[\\-|]?\\s*official\\s+music\\s+video\\s*", " ")
+        .replaceAll("(?i)\\s*[\\-|]?\\s*official\\s+video\\s*", " ")
+        .replaceAll("(?i)\\s*[\\-|]?\\s*official\\s+audio\\s*", " ")
+        .replaceAll("(?i)\\s*[\\-|]?\\s*music\\s+video\\s*", " ")
+        .replaceAll("(?i)\\s*[\\-|]?\\s*lyric(s)?\\s+(video\\s*)?", " ")
+        .replaceAll("(?i)\\s*[\\-|]?\\s*\\bMV\\b\\s*", " ")
+        .replaceAll("(?i)\\s*[\\-|]?\\s*\\(live[^)]*\\)\\s*", " ")
+        .trim();
+
+    // 3. 제목 앞 아티스트명 중복 제거 ("Mrs. GREEN APPLE - lulu." → "lulu.")
+    if (artist != null) {
+      String artistLower = artist.toLowerCase().replaceAll("[^a-z0-9]", "");
+      String cleanedLower = cleaned.toLowerCase().replaceAll("[^a-z0-9]", "");
+      if (!artistLower.isEmpty() && cleanedLower.startsWith(artistLower)) {
+        cleaned = cleaned.substring(artist.length())
+            .replaceAll("^\\s*[-|:「]\\s*", "").trim();
+      }
+    }
+
+    return cleaned.isEmpty() ? title : cleaned;
   }
 
   private String extractVideoId(String url) {
