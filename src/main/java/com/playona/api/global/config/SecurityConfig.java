@@ -68,6 +68,13 @@ public class SecurityConfig {
         )
         .oauth2Login(oauth2 -> oauth2
             .successHandler(oAuth2SuccessHandler)
+            .failureHandler((request, response, exception) -> {
+              String redirectUrl = System.getenv("APP_BASE_URL");
+              if (redirectUrl == null || redirectUrl.isBlank()) {
+                redirectUrl = "http://localhost:3000";
+              }
+              response.sendRedirect(redirectUrl + "/login?error");
+            })
         )
         .addFilterBefore(
             new JwtAuthenticationFilter(jwtProvider),
