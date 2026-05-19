@@ -7,7 +7,7 @@ info:
 servers:
   - url: http://localhost:8080
     description: 로컬 개발 서버
-  - url: https://api.playona.io
+  - url: http://43.201.139.24:8080
     description: 운영 서버
 
 tags:
@@ -186,7 +186,7 @@ paths:
         > **테스트 방법:** 브라우저 주소창에 직접 입력하거나, 프론트엔드에서 `window.location.href`로 이동하세요.
         >
         > - 로컬: `http://localhost:8080/oauth2/authorization/kakao`
-        > - 운영: `https://api.playona.io/oauth2/authorization/kakao`
+        > - 운영: `http://43.201.139.24:8080/oauth2/authorization/kakao`
       responses:
         '302':
           description: 카카오 OAuth2 로그인 페이지로 리다이렉트 (브라우저 직접 접속 필요)
@@ -208,7 +208,7 @@ paths:
         > **테스트 방법:** 브라우저 주소창에 직접 입력하거나, 프론트엔드에서 `window.location.href`로 이동하세요.
         >
         > - 로컬: `http://localhost:8080/oauth2/authorization/google`
-        > - 운영: `https://api.playona.io/oauth2/authorization/google`
+        > - 운영: `http://43.201.139.24:8080/oauth2/authorization/google`
       responses:
         '302':
           description: 구글 OAuth2 로그인 페이지로 리다이렉트 (브라우저 직접 접속 필요)
