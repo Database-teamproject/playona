@@ -36,6 +36,7 @@ services:
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       APP_BASE_URL: https://playona-five.vercel.app
       OAUTH2_REDIRECT_URL: https://playona-five.vercel.app/auth/success
+      KAKAO_REDIRECT_URI: https://playona-five.vercel.app/login/oauth2/code/kakao
     depends_on:
       db:
         condition: service_healthy
