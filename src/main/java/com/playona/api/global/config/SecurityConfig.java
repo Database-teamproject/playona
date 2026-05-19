@@ -1,5 +1,6 @@
 package com.playona.api.global.config;
 
+import com.playona.api.global.security.HttpCookieOAuth2AuthorizationRequestRepository;
 import com.playona.api.global.security.JwtAuthenticationFilter;
 import com.playona.api.global.security.JwtProvider;
 import com.playona.api.global.security.OAuth2SuccessHandler;
@@ -26,6 +27,7 @@ public class SecurityConfig {
 
   private final JwtProvider jwtProvider;
   private final OAuth2SuccessHandler oAuth2SuccessHandler;
+  private final HttpCookieOAuth2AuthorizationRequestRepository cookieAuthorizationRequestRepository;
 
   @Bean
   public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -67,6 +69,9 @@ public class SecurityConfig {
             })
         )
         .oauth2Login(oauth2 -> oauth2
+            .authorizationEndpoint(endpoint -> endpoint
+                .authorizationRequestRepository(cookieAuthorizationRequestRepository)
+            )
             .successHandler(oAuth2SuccessHandler)
             .failureHandler((request, response, exception) -> {
               String redirectUrl = System.getenv("APP_BASE_URL");
