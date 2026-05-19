@@ -7,6 +7,7 @@ import com.playona.api.domain.track.entity.Track;
 import com.playona.api.domain.track.repository.TrackRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.reactive.function.client.WebClient;
 
@@ -23,7 +24,7 @@ public class AppleTrackService {
   private final TrackRepository trackRepository;
   private final ObjectMapper objectMapper = new ObjectMapper();
 
-  @Transactional
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
   public Track getTrackFromUrl(String url) {
     String trackId = extractTrackId(url);
 

@@ -7,6 +7,7 @@ import com.playona.api.domain.track.repository.TrackRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.reactive.function.client.WebClient;
 
@@ -25,7 +26,7 @@ public class YoutubeTrackService {
   private final TrackRepository trackRepository;
   private final WebClient webClient = WebClient.create("https://www.googleapis.com");
 
-  @Transactional
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
   public Track getTrackFromUrl(String url) {
     String videoId = extractVideoId(url);
 
