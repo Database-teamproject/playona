@@ -2,6 +2,8 @@ name: Deploy to EC2
 on:
   push:
     branches: [ dev ]
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -16,8 +18,9 @@ jobs:
           username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            # 1. 최초 배포 시 클론, 이후엔 pull
+            # 1. git 레포가 없으면 기존 디렉토리 제거 후 클론
             if [ ! -d ~/app/.git ]; then
+              rm -rf ~/app
               git clone https://github.com/Database-teamproject/playona.git ~/app
             fi
             cd ~/app
