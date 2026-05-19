@@ -37,3 +37,6 @@ out/
 .vscode/
 .DS_Store
 src/.DS_Store
+
+# Claude Code worktrees
+.claude/worktrees/
