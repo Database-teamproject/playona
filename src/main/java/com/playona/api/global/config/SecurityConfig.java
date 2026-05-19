@@ -50,7 +50,7 @@ public class SecurityConfig {
             .requestMatchers(HttpMethod.GET, "/api/tracks/{trackId}").permitAll()
             // Swagger / API 문서
             .requestMatchers("/swagger-ui/**", "/swagger-ui.html",
-                "/v3/api-docs/**", "/api-docs/**").permitAll()
+                "/v3/api-docs/**", "/api-docs/**", "/openapi.yaml").permitAll()
             // 에러 페이지
             .requestMatchers("/error").permitAll()
             // 나머지는 모두 인증 필요
