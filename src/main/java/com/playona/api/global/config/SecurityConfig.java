@@ -33,7 +33,7 @@ public class SecurityConfig {
         .cors(cors -> cors.configurationSource(corsConfigurationSource()))
         .csrf(csrf -> csrf.disable())
         .sessionManagement(session ->
-            session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
         .authorizeHttpRequests(auth -> auth
             // 인증 관련 (로그인, 토큰 갱신, 로그아웃)
             .requestMatchers("/api/auth/**").permitAll()
@@ -73,10 +73,7 @@ public class SecurityConfig {
               if (redirectUrl == null || redirectUrl.isBlank()) {
                 redirectUrl = "http://localhost:3000";
               }
-              String errorMsg = java.net.URLEncoder.encode(
-                  exception.getClass().getSimpleName() + ": " + exception.getMessage(),
-                  java.nio.charset.StandardCharsets.UTF_8);
-              response.sendRedirect(redirectUrl + "/login?error=" + errorMsg);
+              response.sendRedirect(redirectUrl + "/login?error");
             })
         )
         .addFilterBefore(
