@@ -7,3 +7,6 @@ VALUES
 
 -- Melon은 서비스하지 않으므로 비활성화 (이미 DB에 들어가 있는 경우 대비)
 UPDATE platforms SET is_active = false WHERE slug = 'melon';
+
+-- 기존 tracks rows 중 track_uuid 없는 행 UUID 채우기 (스키마 마이그레이션 대응)
+UPDATE tracks SET track_uuid = gen_random_uuid()::text WHERE track_uuid IS NULL;

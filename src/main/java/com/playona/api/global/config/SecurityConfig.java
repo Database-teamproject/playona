@@ -1,7 +1,5 @@
 package com.playona.api.global.config;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.playona.api.global.common.ApiResponse;
 import com.playona.api.global.security.JwtAuthenticationFilter;
 import com.playona.api.global.security.JwtProvider;
 import com.playona.api.global.security.OAuth2SuccessHandler;
@@ -28,7 +26,6 @@ public class SecurityConfig {
 
   private final JwtProvider jwtProvider;
   private final OAuth2SuccessHandler oAuth2SuccessHandler;
-  private final ObjectMapper objectMapper;
 
   @Bean
   public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -60,12 +57,12 @@ public class SecurityConfig {
             .anyRequest().authenticated()
         )
         .exceptionHandling(ex -> ex
-            // 인증되지 않은 요청 → 401 JSON 응답
+            // 인증되지 않은 요청 → 401 JSON 응답 (ObjectMapper 없이 직접 작성)
             .authenticationEntryPoint((request, response, authException) -> {
               response.setStatus(401);
               response.setContentType(MediaType.APPLICATION_JSON_VALUE + ";charset=UTF-8");
               response.getWriter().write(
-                  objectMapper.writeValueAsString(ApiResponse.fail("인증이 필요합니다."))
+                  "{\"success\":false,\"data\":null,\"message\":\"인증이 필요합니다.\",\"result\":\"FAIL\"}"
               );
             })
         )
@@ -87,7 +84,8 @@ public class SecurityConfig {
         "http://localhost:3000",
         "https://playona-five.vercel.app",
         "http://localhost:8080",
-        "http://localhost:5173"// trailing slash 제거
+        "http://localhost:5173",
+        "http://43.201.139.24:8080"
     ));
     config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
     config.setAllowedHeaders(List.of("*"));
