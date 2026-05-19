@@ -59,7 +59,8 @@ public class YoutubeTrackService {
     Map contentDetails = (Map) firstItem.get("contentDetails");
 
     String rawTitle = snippet != null ? (String) snippet.get("title") : null;
-    String artist = snippet != null ? (String) snippet.get("channelTitle") : null;
+    String rawArtist = snippet != null ? (String) snippet.get("channelTitle") : null;
+    String artist = cleanArtist(rawArtist);
     String title = cleanTitle(rawTitle, artist);
 
     String thumbnail = null;
@@ -135,6 +136,12 @@ public class YoutubeTrackService {
     String artist = (String) snippet.get("channelTitle");
 
     return new PlatformTrack(track, platform, videoId, url, title, artist);
+  }
+
+  /** YouTube 채널명에서 아티스트명 추출. "Mrs. GREEN APPLE - Topic" → "Mrs. GREEN APPLE" */
+  private String cleanArtist(String channelTitle) {
+    if (channelTitle == null) return null;
+    return channelTitle.replaceAll("\\s*-\\s*Topic$", "").trim();
   }
 
   /**
