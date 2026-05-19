@@ -73,7 +73,10 @@ public class SecurityConfig {
               if (redirectUrl == null || redirectUrl.isBlank()) {
                 redirectUrl = "http://localhost:3000";
               }
-              response.sendRedirect(redirectUrl + "/login?error");
+              String errorMsg = java.net.URLEncoder.encode(
+                  exception.getClass().getSimpleName() + ": " + exception.getMessage(),
+                  java.nio.charset.StandardCharsets.UTF_8);
+              response.sendRedirect(redirectUrl + "/login?error=" + errorMsg);
             })
         )
         .addFilterBefore(
