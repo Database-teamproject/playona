@@ -83,7 +83,7 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
     ));
 
     // 토큰을 URL fragment(#)로 전달 — query param은 서버 로그·브라우저 히스토리에 노출됨
-    String targetUrl = redirectUrl + "#access=" + accessToken + "&refresh=" + refreshToken;
+    String targetUrl = redirectUrl + "#accessToken=" + accessToken + "&refreshToken=" + refreshToken;
     getRedirectStrategy().sendRedirect(request, response, targetUrl);
   }
 }
