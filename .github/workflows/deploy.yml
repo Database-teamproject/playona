@@ -43,5 +43,5 @@ jobs:
             # 3. 앱 재빌드 & 재시작 (DB 컨테이너는 유지)
             docker-compose up -d --build app
 
-            # 4. 불필요한 이미지 정리
-            docker image prune -f
+            # 4. 불필요한 이미지 및 빌드 캐시 정리
+            docker system prune -f
