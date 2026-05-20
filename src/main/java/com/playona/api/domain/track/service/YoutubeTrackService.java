@@ -112,7 +112,7 @@ public class YoutubeTrackService {
             .queryParam("q", query)
             .queryParam("type", "video")
             .queryParam("videoCategoryId", "10")
-            .queryParam("maxResults", "1")
+            .queryParam("maxResults", "5")
             .queryParam("key", apiKey)
             .build())
         .retrieve()
@@ -123,13 +123,27 @@ public class YoutubeTrackService {
     List items = (List) response.get("items");
     if (items == null || items.isEmpty()) return null;
 
-    Map item = (Map) items.get(0);
-    Map idMap = (Map) item.get("id");
+    // Topic 채널(공식 음원) 우선, 없으면 첫 번째 결과
+    Map best = null;
+    for (Object obj : items) {
+      Map item = (Map) obj;
+      Map snippet = (Map) item.get("snippet");
+      if (snippet == null) continue;
+      String channelTitle = (String) snippet.get("channelTitle");
+      if (channelTitle != null && channelTitle.endsWith("- Topic")) {
+        best = item;
+        break;
+      }
+      if (best == null) best = item;
+    }
+
+    if (best == null) return null;
+    Map idMap = (Map) best.get("id");
     if (idMap == null) return null;
     String videoId = (String) idMap.get("videoId");
     if (videoId == null) return null;
 
-    Map snippet = (Map) item.get("snippet");
+    Map snippet = (Map) best.get("snippet");
     if (snippet == null) return null;
     String url = "https://music.youtube.com/watch?v=" + videoId;
     String title = (String) snippet.get("title");
