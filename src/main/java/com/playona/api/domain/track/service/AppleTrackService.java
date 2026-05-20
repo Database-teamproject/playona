@@ -168,8 +168,11 @@ public class AppleTrackService {
 
     // 다중 아티스트 쿼리는 iTunes 검색 품질 저하 → 첫 번째 아티스트만 사용
     String mainArtist = track.getArtist().split("[,&]")[0].trim();
-    // iTunes는 괄호 URL 인코딩(%28%29) 시 검색 품질 급락 → 공백으로 교체 후 정규화
-    String cleanTitle = track.getTitle().replaceAll("[\\(\\)\\[\\]\\{\\}]", " ").replaceAll("\\s+", " ").trim();
+    // (2025) / [2025] 연도 접미사 제거 후 나머지 괄호도 공백으로 교체
+    String cleanTitle = track.getTitle()
+        .replaceAll("[\\(\\[]\\d{4}[\\)\\]]", "")
+        .replaceAll("[\\(\\)\\[\\]\\{\\}]", " ")
+        .replaceAll("\\s+", " ").trim();
     String query = cleanTitle + " " + mainArtist;
     String encoded = URLEncoder.encode(query, StandardCharsets.UTF_8);
     log.info("[Apple] title+artist 검색 시작 - query: '{}', title: '{}', mainArtist: '{}'",
@@ -238,7 +241,7 @@ public class AppleTrackService {
     try {
       String responseBody = WebClient.create()
               .get()
-              .uri(url)
+              .uri(java.net.URI.create(url))
               .retrieve()
               .bodyToMono(String.class)
               .block();
