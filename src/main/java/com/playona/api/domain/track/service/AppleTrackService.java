@@ -197,9 +197,14 @@ public class AppleTrackService {
 
   private boolean isSimilar(String a, String b) {
     if (a == null || b == null) return false;
-    String na = a.toLowerCase().replaceAll("[^a-z0-9가-힣]", "");
-    String nb = b.toLowerCase().replaceAll("[^a-z0-9가-힣]", "");
+    // 영문/숫자/한글/일본어(히라가나·카타카나·한자) 유지
+    String na = a.toLowerCase().replaceAll("[^a-z0-9가-힣\\u3040-\\u30ff\\u4e00-\\u9fff]", "");
+    String nb = b.toLowerCase().replaceAll("[^a-z0-9가-힣\\u3040-\\u30ff\\u4e00-\\u9fff]", "");
     if (na.isEmpty() || nb.isEmpty()) return false;
+    // 짧은 쪽이 긴 쪽의 50% 이상이어야 하고, 한쪽이 다른 쪽을 포함해야 매칭
+    int minLen = Math.min(na.length(), nb.length());
+    int maxLen = Math.max(na.length(), nb.length());
+    if (minLen < maxLen * 0.5) return false;
     return na.contains(nb) || nb.contains(na);
   }
 
