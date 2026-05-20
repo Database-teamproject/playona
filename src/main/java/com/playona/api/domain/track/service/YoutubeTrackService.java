@@ -111,7 +111,6 @@ public class YoutubeTrackService {
             .queryParam("part", "snippet")
             .queryParam("q", query)
             .queryParam("type", "video")
-            .queryParam("videoCategoryId", "10")
             .queryParam("maxResults", "5")
             .queryParam("key", apiKey)
             .build())
