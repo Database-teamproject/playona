@@ -6,6 +6,7 @@ import com.playona.api.domain.platform.entity.PlatformTrack;
 import com.playona.api.domain.track.entity.Track;
 import com.playona.api.domain.track.repository.TrackRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,6 +18,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AppleTrackService {
@@ -168,6 +170,8 @@ public class AppleTrackService {
     String mainArtist = track.getArtist().split("[,&]")[0].trim();
     String query = track.getTitle() + " " + mainArtist;
     String encoded = URLEncoder.encode(query, StandardCharsets.UTF_8);
+    log.info("[Apple] title+artist 검색 시작 - query: '{}', title: '{}', mainArtist: '{}'",
+        query, track.getTitle(), mainArtist);
 
     // KR → US → JP 순서로 시도 (한국/글로벌 음원 우선, JP는 일본 전용 음원 폴백)
     for (String country : new String[]{"kr", "us", "jp"}) {
@@ -176,22 +180,30 @@ public class AppleTrackService {
 
       Map response = getAppleResponseAsMap(searchUrl, "Failed to parse Apple search response");
       List results = (List) response.get("results");
+      log.info("[Apple] country={} resultCount={}", country, results == null ? 0 : results.size());
       if (results == null || results.isEmpty()) continue;
 
       for (Object obj : results) {
         Map item = (Map) obj;
         String resultTitle = (String) item.get("trackName");
         String resultArtist = (String) item.get("artistName");
+        log.info("[Apple] 후보: title='{}' artist='{}'", resultTitle, resultArtist);
 
         // 제목 유사도 검사
-        if (!isSimilar(track.getTitle(), resultTitle)) continue;
+        if (!isSimilar(track.getTitle(), resultTitle)) {
+          log.info("[Apple] 제목 불일치 skip: '{}' vs '{}'", track.getTitle(), resultTitle);
+          continue;
+        }
 
-        // 아티스트 비교: 양쪽 모두 첫 번째 아티스트만 추출 (다중 아티스트 & 로마자/한글 표기 차이 대응)
+        // 아티스트 비교: 양쪽 모두 첫 번째 아티스트만 추출
         String mainStoredArtist = track.getArtist() != null
             ? track.getArtist().split("[,&]")[0].trim() : "";
         String mainResultArtist = resultArtist != null
             ? resultArtist.split("[,&]")[0].trim() : "";
-        if (!isSimilar(mainStoredArtist, mainResultArtist)) continue;
+        if (!isSimilar(mainStoredArtist, mainResultArtist)) {
+          log.info("[Apple] 아티스트 불일치 skip: '{}' vs '{}'", mainStoredArtist, mainResultArtist);
+          continue;
+        }
 
         Object rawTrackId = item.get("trackId");
         String trackId = rawTrackId != null ? String.valueOf(rawTrackId) : null;
@@ -199,9 +211,11 @@ public class AppleTrackService {
         if (trackId == null || url == null) continue;
 
         String krUrl = url.replaceFirst("music\\.apple\\.com/[a-z]{2}/", "music.apple.com/kr/");
+        log.info("[Apple] 매칭 성공: '{}' - '{}'", resultTitle, krUrl);
         return new PlatformTrack(track, platform, trackId, krUrl, resultTitle, resultArtist);
       }
     }
+    log.warn("[Apple] 매칭 실패 - title: '{}', artist: '{}'", track.getTitle(), track.getArtist());
     return null;
   }
 
