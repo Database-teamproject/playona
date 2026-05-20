@@ -181,9 +181,15 @@ public class AppleTrackService {
         String resultTitle = (String) item.get("trackName");
         String resultArtist = (String) item.get("artistName");
 
-        // 제목과 아티스트 모두 유사해야 수락
+        // 제목 유사도 검사
         if (!isSimilar(track.getTitle(), resultTitle)) continue;
-        if (!isSimilar(track.getArtist(), resultArtist)) continue;
+
+        // 아티스트 비교: 양쪽 모두 첫 번째 아티스트만 추출 (다중 아티스트 & 로마자/한글 표기 차이 대응)
+        String mainStoredArtist = track.getArtist() != null
+            ? track.getArtist().split("[,&]")[0].trim() : "";
+        String mainResultArtist = resultArtist != null
+            ? resultArtist.split("[,&]")[0].trim() : "";
+        if (!isSimilar(mainStoredArtist, mainResultArtist)) continue;
 
         Object rawTrackId = item.get("trackId");
         String trackId = rawTrackId != null ? String.valueOf(rawTrackId) : null;
