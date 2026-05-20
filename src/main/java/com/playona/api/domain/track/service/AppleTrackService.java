@@ -168,7 +168,9 @@ public class AppleTrackService {
 
     // 다중 아티스트 쿼리는 iTunes 검색 품질 저하 → 첫 번째 아티스트만 사용
     String mainArtist = track.getArtist().split("[,&]")[0].trim();
-    String query = track.getTitle() + " " + mainArtist;
+    // iTunes는 괄호 URL 인코딩(%28%29) 시 검색 품질 급락 → 특수문자 제거 후 검색
+    String cleanTitle = track.getTitle().replaceAll("[\\(\\)\\[\\]\\{\\}]", "").trim();
+    String query = cleanTitle + " " + mainArtist;
     String encoded = URLEncoder.encode(query, StandardCharsets.UTF_8);
     log.info("[Apple] title+artist 검색 시작 - query: '{}', title: '{}', mainArtist: '{}'",
         query, track.getTitle(), mainArtist);
