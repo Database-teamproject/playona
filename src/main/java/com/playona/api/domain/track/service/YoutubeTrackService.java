@@ -123,18 +123,34 @@ public class YoutubeTrackService {
     List items = (List) response.get("items");
     if (items == null || items.isEmpty()) return null;
 
-    // Topic 채널(공식 음원) 우선, 없으면 첫 번째 결과
+    // 우선순위: 1) Topic 채널(공식 음원) → 2) 라이브 아닌 영상 → 3) 아무 영상
     Map best = null;
+    Map bestNonLive = null;
     for (Object obj : items) {
       Map item = (Map) obj;
       Map snippet = (Map) item.get("snippet");
       if (snippet == null) continue;
       String channelTitle = (String) snippet.get("channelTitle");
+      String videoTitle = (String) snippet.get("title");
+
+      // 1순위: Topic 채널
       if (channelTitle != null && channelTitle.endsWith("- Topic")) {
         best = item;
         break;
       }
+
+      // 2순위 후보: 라이브/콘서트 영상 제외
+      if (bestNonLive == null && !isLiveVideo(videoTitle)) {
+        bestNonLive = item;
+      }
+
+      // 3순위 후보: 아무거나
       if (best == null) best = item;
+    }
+
+    // Topic 없으면 비-라이브 우선, 그것도 없으면 첫 번째
+    if (best == null || !((Map) best.get("snippet")).getOrDefault("channelTitle", "").toString().endsWith("- Topic")) {
+      if (bestNonLive != null) best = bestNonLive;
     }
 
     if (best == null) return null;
@@ -150,6 +166,14 @@ public class YoutubeTrackService {
     String artist = (String) snippet.get("channelTitle");
 
     return new PlatformTrack(track, platform, videoId, url, title, artist);
+  }
+
+  /** 라이브/콘서트 영상 여부 판단 */
+  private boolean isLiveVideo(String title) {
+    if (title == null) return false;
+    String lower = title.toLowerCase();
+    return lower.contains("live") || lower.contains("concert") || lower.contains("tour")
+        || lower.contains("라이브") || lower.contains("공연") || lower.contains("콘서트");
   }
 
   /** YouTube 채널명에서 아티스트명 추출. "Mrs. GREEN APPLE - Topic" → "Mrs. GREEN APPLE" */
