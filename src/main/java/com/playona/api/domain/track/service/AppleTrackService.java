@@ -157,7 +157,8 @@ public class AppleTrackService {
 
     if (trackId == null || url == null) return null;
 
-    return new PlatformTrack(track, platform, trackId, url, title, artist);
+    String krUrl = url.replaceFirst("music\\.apple\\.com/[a-z]{2}/", "music.apple.com/kr/");
+    return new PlatformTrack(track, platform, trackId, krUrl, title, artist);
   }
 
   private PlatformTrack searchAppleByTitleArtist(Track track, Platform platform) {
@@ -166,8 +167,8 @@ public class AppleTrackService {
     String query = track.getTitle() + " " + track.getArtist();
     String encoded = URLEncoder.encode(query, StandardCharsets.UTF_8);
 
-    // JP 스토어 우선 시도 (일본 음원 커버리지), 실패 시 글로벌
-    for (String country : new String[]{"jp", "us", "kr"}) {
+    // KR → US → JP 순서로 시도 (한국/글로벌 음원 우선, JP는 일본 전용 음원 폴백)
+    for (String country : new String[]{"kr", "us", "jp"}) {
       String searchUrl = "https://itunes.apple.com/search?term=" + encoded
           + "&entity=song&limit=3&country=" + country;
 
@@ -189,7 +190,8 @@ public class AppleTrackService {
         String url = (String) item.get("trackViewUrl");
         if (trackId == null || url == null) continue;
 
-        return new PlatformTrack(track, platform, trackId, url, resultTitle, resultArtist);
+        String krUrl = url.replaceFirst("music\\.apple\\.com/[a-z]{2}/", "music.apple.com/kr/");
+        return new PlatformTrack(track, platform, trackId, krUrl, resultTitle, resultArtist);
       }
     }
     return null;
