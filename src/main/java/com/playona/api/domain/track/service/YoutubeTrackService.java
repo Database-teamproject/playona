@@ -13,8 +13,11 @@ import org.springframework.web.reactive.function.client.WebClient;
 
 import java.time.Duration;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -103,7 +106,9 @@ public class YoutubeTrackService {
   }
 
   public PlatformTrack searchTrack(Track track, Platform platform) {
-    String query = track.getTitle() + " " + track.getArtist();
+    // 피처링 아티스트 제거: "Artist1, Artist2" → "Artist1"
+    String mainArtist = track.getArtist() != null ? track.getArtist().split(",")[0].trim() : "";
+    String query = track.getTitle() + " " + mainArtist;
 
     Map response = webClient.get()
         .uri(uriBuilder -> uriBuilder
@@ -111,7 +116,7 @@ public class YoutubeTrackService {
             .queryParam("part", "snippet")
             .queryParam("q", query)
             .queryParam("type", "video")
-            .queryParam("maxResults", "5")
+            .queryParam("maxResults", "10")
             .queryParam("key", apiKey)
             .build())
         .retrieve()
@@ -119,37 +124,64 @@ public class YoutubeTrackService {
         .block();
 
     if (response == null) return null;
-    List items = (List) response.get("items");
-    if (items == null || items.isEmpty()) return null;
+    List rawItems = (List) response.get("items");
+    if (rawItems == null || rawItems.isEmpty()) return null;
+
+    // videoId 수집 → duration 배치 조회
+    List<String> videoIds = new ArrayList<>();
+    for (Object obj : rawItems) {
+      Map item = (Map) obj;
+      Map idMap = (Map) item.get("id");
+      if (idMap != null && idMap.get("videoId") != null) {
+        videoIds.add((String) idMap.get("videoId"));
+      }
+    }
+    Map<String, Long> durations = fetchVideosDuration(videoIds);
 
     // 우선순위: 1) Topic 채널 → 2) 아티스트 공식 채널 → 3) 비-노이즈 영상 → 4) 아무 영상
+    // duration 있으면 ±15초 이내만 후보로 허용
+    Long targetMs = track.getDurationMs() != null ? track.getDurationMs().longValue() : null;
+    final long DURATION_TOLERANCE_MS = 15_000L;
+
     Map best = null;
     Map bestOfficial = null;
     Map bestClean = null;
-    for (Object obj : items) {
+
+    for (Object obj : rawItems) {
       Map item = (Map) obj;
+      Map idMap = (Map) item.get("id");
+      if (idMap == null) continue;
+      String videoId = (String) idMap.get("videoId");
+      if (videoId == null) continue;
+
       Map snippet = (Map) item.get("snippet");
       if (snippet == null) continue;
       String channelTitle = (String) snippet.get("channelTitle");
       String videoTitle = (String) snippet.get("title");
 
-      // 1순위: Topic 채널
+      // duration 불일치 시 스킵 (duration 정보가 있을 때만)
+      if (targetMs != null && durations.containsKey(videoId)) {
+        long diff = Math.abs(durations.get(videoId) - targetMs);
+        if (diff > DURATION_TOLERANCE_MS) continue;
+      }
+
+      // 1순위: Topic 채널 (YouTube Music 공식 음원)
       if (channelTitle != null && channelTitle.endsWith("- Topic")) {
         best = item;
         break;
       }
 
       // 2순위 후보: 아티스트명 = 채널명 (공식 채널)
-      if (bestOfficial == null && isOfficialChannel(track.getArtist(), channelTitle)) {
+      if (bestOfficial == null && isOfficialChannel(mainArtist, channelTitle)) {
         bestOfficial = item;
       }
 
-      // 3순위 후보: 가사/라이브/커버 아닌 영상
+      // 3순위 후보: 노이즈 아닌 영상 (MV 포함 noise 제외)
       if (bestClean == null && !isNoiseVideo(videoTitle)) {
         bestClean = item;
       }
 
-      // 4순위 후보: 아무거나
+      // 4순위 후보
       if (best == null) best = item;
     }
 
@@ -174,14 +206,52 @@ public class YoutubeTrackService {
     return new PlatformTrack(track, platform, videoId, url, title, artist);
   }
 
-  /** 가사/라이브/커버 등 노이즈 영상 여부 판단 */
+  /** 검색 결과 videoId 목록으로 duration(ms) 배치 조회 */
+  private Map<String, Long> fetchVideosDuration(List<String> videoIds) {
+    if (videoIds.isEmpty()) return Map.of();
+    String ids = String.join(",", videoIds);
+
+    Map response = webClient.get()
+        .uri(uriBuilder -> uriBuilder
+            .path("/youtube/v3/videos")
+            .queryParam("part", "contentDetails")
+            .queryParam("id", ids)
+            .queryParam("key", apiKey)
+            .build())
+        .retrieve()
+        .bodyToMono(Map.class)
+        .block();
+
+    if (response == null) return Map.of();
+    List items = (List) response.get("items");
+    if (items == null) return Map.of();
+
+    Map<String, Long> result = new HashMap<>();
+    for (Object obj : items) {
+      Map item = (Map) obj;
+      String id = (String) item.get("id");
+      Map contentDetails = (Map) item.get("contentDetails");
+      if (id == null || contentDetails == null) continue;
+      String duration = (String) contentDetails.get("duration");
+      if (duration != null) {
+        try {
+          result.put(id, Duration.parse(duration).toMillis());
+        } catch (Exception ignored) {}
+      }
+    }
+    return result;
+  }
+
+  /** 가사/라이브/커버/MV 등 노이즈 영상 여부 판단 */
   private boolean isNoiseVideo(String title) {
     if (title == null) return false;
     String lower = title.toLowerCase();
     return lower.contains("live") || lower.contains("concert") || lower.contains("tour")
         || lower.contains("라이브") || lower.contains("공연") || lower.contains("콘서트")
         || lower.contains("가사") || lower.contains("lyrics") || lower.contains("lyric")
-        || lower.contains("cover") || lower.contains("커버") || lower.contains("reaction");
+        || lower.contains("cover") || lower.contains("커버") || lower.contains("reaction")
+        || lower.contains("music video") || lower.contains("뮤직비디오") || lower.contains("뮤비")
+        || lower.matches(".*\\bmv\\b.*");  // " MV" 단어 단위 (remix/mv 구분)
   }
 
   /** 아티스트명과 채널명 유사도 체크 (공식 채널 판별) */

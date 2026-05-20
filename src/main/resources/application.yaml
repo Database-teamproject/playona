@@ -60,11 +60,12 @@ jwt:
   refresh-expiration: 1209600000  # 14일 (ms)
 
 youtube:
-  api-key: ${YOUTUBE_API_KEY}
+  api-key: ${YOUTUBE_API_KEY:}
 
 spotify:
-  client-id: ${SPOTIFY_CLIENT_ID}
-  client-secret: ${SPOTIFY_CLIENT_SECRET}
+  client-id: ${SPOTIFY_CLIENT_ID:}
+  client-secret: ${SPOTIFY_CLIENT_SECRET:}
+
 
 # ── EC2 프로덕션 배포 시 반드시 설정해야 할 환경변수 ──────────────────────────
 # APP_BASE_URL          : 공유 링크 도메인 (프론트 URL) ex) https://playona-five.vercel.app
