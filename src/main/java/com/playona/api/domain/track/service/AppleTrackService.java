@@ -123,13 +123,14 @@ public class AppleTrackService {
 
   public PlatformTrack searchTrack(Track track, Platform platform) {
     try {
-      // ISRC 없으면 매칭 불가 — 오매칭 방지
-      if (track.getIsrc() == null || track.getIsrc().isBlank()) {
-        return null;
+      // 1. ISRC 기반 매칭 우선
+      if (track.getIsrc() != null && !track.getIsrc().isBlank()) {
+        PlatformTrack byIsrc = searchAppleByIsrc(track, platform, track.getIsrc());
+        if (byIsrc != null) return byIsrc;
       }
 
-      // ISRC 기반 매칭
-      return searchAppleByIsrc(track, platform, track.getIsrc());
+      // 2. ISRC 없거나 조회 실패 시 title+artist 검색 (유사도 검사 포함)
+      return searchAppleByTitleArtist(track, platform);
 
     } catch (Exception e) {
       throw new RuntimeException("Apple search failed: " + e.getMessage(), e);
@@ -160,28 +161,46 @@ public class AppleTrackService {
   }
 
   private PlatformTrack searchAppleByTitleArtist(Track track, Platform platform) {
+    if (track.getTitle() == null || track.getArtist() == null) return null;
+
     String query = track.getTitle() + " " + track.getArtist();
+    String encoded = URLEncoder.encode(query, StandardCharsets.UTF_8);
 
-    String searchUrl = "https://itunes.apple.com/search?term=" +
-            URLEncoder.encode(query, StandardCharsets.UTF_8) +
-            "&entity=song&limit=1";
+    // JP 스토어 우선 시도 (일본 음원 커버리지), 실패 시 글로벌
+    for (String country : new String[]{"jp", "us", "kr"}) {
+      String searchUrl = "https://itunes.apple.com/search?term=" + encoded
+          + "&entity=song&limit=3&country=" + country;
 
-    Map response = getAppleResponseAsMap(searchUrl, "Failed to parse Apple search response");
+      Map response = getAppleResponseAsMap(searchUrl, "Failed to parse Apple search response");
+      List results = (List) response.get("results");
+      if (results == null || results.isEmpty()) continue;
 
-    List results = (List) response.get("results");
-    if (results == null || results.isEmpty()) return null;
+      for (Object obj : results) {
+        Map item = (Map) obj;
+        String resultTitle = (String) item.get("trackName");
+        String resultArtist = (String) item.get("artistName");
 
-    Map item = (Map) results.get(0);
+        // 제목과 아티스트 모두 유사해야 수락
+        if (!isSimilar(track.getTitle(), resultTitle)) continue;
+        if (!isSimilar(track.getArtist(), resultArtist)) continue;
 
-    Object rawTrackId = item.get("trackId");
-    String trackId = rawTrackId != null ? String.valueOf(rawTrackId) : null;
-    String url = (String) item.get("trackViewUrl");
-    String title = (String) item.get("trackName");
-    String artist = (String) item.get("artistName");
+        Object rawTrackId = item.get("trackId");
+        String trackId = rawTrackId != null ? String.valueOf(rawTrackId) : null;
+        String url = (String) item.get("trackViewUrl");
+        if (trackId == null || url == null) continue;
 
-    if (trackId == null || url == null) return null;
+        return new PlatformTrack(track, platform, trackId, url, resultTitle, resultArtist);
+      }
+    }
+    return null;
+  }
 
-    return new PlatformTrack(track, platform, trackId, url, title, artist);
+  private boolean isSimilar(String a, String b) {
+    if (a == null || b == null) return false;
+    String na = a.toLowerCase().replaceAll("[^a-z0-9가-힣]", "");
+    String nb = b.toLowerCase().replaceAll("[^a-z0-9가-힣]", "");
+    if (na.isEmpty() || nb.isEmpty()) return false;
+    return na.contains(nb) || nb.contains(na);
   }
 
   private Map getAppleResponseAsMap(String url, String errorMessage) {
