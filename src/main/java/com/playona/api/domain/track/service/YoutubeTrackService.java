@@ -123,9 +123,10 @@ public class YoutubeTrackService {
     List items = (List) response.get("items");
     if (items == null || items.isEmpty()) return null;
 
-    // 우선순위: 1) Topic 채널(공식 음원) → 2) 라이브 아닌 영상 → 3) 아무 영상
+    // 우선순위: 1) Topic 채널 → 2) 아티스트 공식 채널 → 3) 비-노이즈 영상 → 4) 아무 영상
     Map best = null;
-    Map bestNonLive = null;
+    Map bestOfficial = null;
+    Map bestClean = null;
     for (Object obj : items) {
       Map item = (Map) obj;
       Map snippet = (Map) item.get("snippet");
@@ -139,18 +140,24 @@ public class YoutubeTrackService {
         break;
       }
 
-      // 2순위 후보: 라이브/콘서트 영상 제외
-      if (bestNonLive == null && !isLiveVideo(videoTitle)) {
-        bestNonLive = item;
+      // 2순위 후보: 아티스트명 = 채널명 (공식 채널)
+      if (bestOfficial == null && isOfficialChannel(track.getArtist(), channelTitle)) {
+        bestOfficial = item;
       }
 
-      // 3순위 후보: 아무거나
+      // 3순위 후보: 가사/라이브/커버 아닌 영상
+      if (bestClean == null && !isNoiseVideo(videoTitle)) {
+        bestClean = item;
+      }
+
+      // 4순위 후보: 아무거나
       if (best == null) best = item;
     }
 
-    // Topic 없으면 비-라이브 우선, 그것도 없으면 첫 번째
+    // Topic 없으면 공식채널 → 클린 → 첫 번째 순
     if (best == null || !((Map) best.get("snippet")).getOrDefault("channelTitle", "").toString().endsWith("- Topic")) {
-      if (bestNonLive != null) best = bestNonLive;
+      if (bestOfficial != null) best = bestOfficial;
+      else if (bestClean != null) best = bestClean;
     }
 
     if (best == null) return null;
@@ -168,12 +175,23 @@ public class YoutubeTrackService {
     return new PlatformTrack(track, platform, videoId, url, title, artist);
   }
 
-  /** 라이브/콘서트 영상 여부 판단 */
-  private boolean isLiveVideo(String title) {
+  /** 가사/라이브/커버 등 노이즈 영상 여부 판단 */
+  private boolean isNoiseVideo(String title) {
     if (title == null) return false;
     String lower = title.toLowerCase();
     return lower.contains("live") || lower.contains("concert") || lower.contains("tour")
-        || lower.contains("라이브") || lower.contains("공연") || lower.contains("콘서트");
+        || lower.contains("라이브") || lower.contains("공연") || lower.contains("콘서트")
+        || lower.contains("가사") || lower.contains("lyrics") || lower.contains("lyric")
+        || lower.contains("cover") || lower.contains("커버") || lower.contains("reaction");
+  }
+
+  /** 아티스트명과 채널명 유사도 체크 (공식 채널 판별) */
+  private boolean isOfficialChannel(String artist, String channelTitle) {
+    if (artist == null || channelTitle == null) return false;
+    String na = artist.toLowerCase().replaceAll("[^a-z0-9가-힣]", "");
+    String nc = channelTitle.toLowerCase().replaceAll("[^a-z0-9가-힣]", "");
+    if (na.isEmpty() || nc.isEmpty()) return false;
+    return na.equals(nc) || nc.contains(na) || na.contains(nc);
   }
 
   /** YouTube 채널명에서 아티스트명 추출. "Mrs. GREEN APPLE - Topic" → "Mrs. GREEN APPLE" */
