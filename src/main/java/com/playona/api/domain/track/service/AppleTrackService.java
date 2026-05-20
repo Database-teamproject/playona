@@ -164,7 +164,9 @@ public class AppleTrackService {
   private PlatformTrack searchAppleByTitleArtist(Track track, Platform platform) {
     if (track.getTitle() == null || track.getArtist() == null) return null;
 
-    String query = track.getTitle() + " " + track.getArtist();
+    // 다중 아티스트 쿼리는 iTunes 검색 품질 저하 → 첫 번째 아티스트만 사용
+    String mainArtist = track.getArtist().split("[,&]")[0].trim();
+    String query = track.getTitle() + " " + mainArtist;
     String encoded = URLEncoder.encode(query, StandardCharsets.UTF_8);
 
     // KR → US → JP 순서로 시도 (한국/글로벌 음원 우선, JP는 일본 전용 음원 폴백)
