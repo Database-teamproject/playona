@@ -106,8 +106,10 @@ public class YoutubeTrackService {
   }
 
   public PlatformTrack searchTrack(Track track, Platform platform) {
-    // 피처링 아티스트 제거: "Artist1, Artist2" → "Artist1"
-    String mainArtist = track.getArtist() != null ? track.getArtist().split(",")[0].trim() : "";
+    // 피처링 제거 후 괄호 제거: "엠씨더맥스 (M.C the MAX), ..." → "엠씨더맥스"
+    String mainArtist = cleanArtistForSearch(
+        track.getArtist() != null ? track.getArtist().split(",")[0].trim() : ""
+    );
     String query = track.getTitle() + " " + mainArtist;
 
     Map response = webClient.get()
@@ -256,6 +258,11 @@ public class YoutubeTrackService {
         || lower.contains("fancam") || lower.contains("소름") || lower.contains("remix")
         || lower.matches(".*\\bmr\\b.*")
         || lower.matches(".*\\bmv\\b.*");
+  }
+
+  private String cleanArtistForSearch(String artist) {
+    if (artist == null || artist.isBlank()) return "";
+    return artist.replaceAll("\\s*[\\(\\[].*?[\\)\\]]\\s*", " ").replaceAll("\\s+", " ").trim();
   }
 
   /** 아티스트명과 채널명 유사도 체크 (공식 채널 판별) */

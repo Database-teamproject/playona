@@ -4,6 +4,7 @@ import com.playona.api.domain.platform.entity.Platform;
 import com.playona.api.domain.platform.entity.PlatformTrack;
 import com.playona.api.domain.track.entity.Track;
 import com.playona.api.domain.track.repository.TrackRepository;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -12,7 +13,6 @@ import org.springframework.transaction.annotation.Transactional;
 import se.michaelthelin.spotify.SpotifyApi;
 import se.michaelthelin.spotify.model_objects.credentials.ClientCredentials;
 import se.michaelthelin.spotify.model_objects.specification.ArtistSimplified;
-import se.michaelthelin.spotify.requests.authorization.client_credentials.ClientCredentialsRequest;
 
 import java.time.LocalDate;
 import java.util.Arrays;
@@ -28,24 +28,49 @@ public class SpotifyTrackService {
     @Value("${spotify.client-secret}")
     private String clientSecret;
 
+    private SpotifyApi spotifyApi;
+    private volatile String cachedToken;
+    private volatile long tokenExpiresAt = 0;
+
+    @PostConstruct
+    void init() {
+        spotifyApi = new SpotifyApi.Builder()
+                .setClientId(clientId)
+                .setClientSecret(clientSecret)
+                .build();
+    }
+
+    private synchronized String getAccessToken() {
+        if (cachedToken == null || System.currentTimeMillis() >= tokenExpiresAt) {
+            try {
+                ClientCredentials credentials = spotifyApi.clientCredentials().build().execute();
+                cachedToken = credentials.getAccessToken();
+                tokenExpiresAt = System.currentTimeMillis() + (credentials.getExpiresIn() - 60L) * 1000L;
+            } catch (Exception e) {
+                throw new RuntimeException("Spotify token refresh failed: " + e.getMessage(), e);
+            }
+        }
+        return cachedToken;
+    }
+
+    private SpotifyApi authorizedApi() {
+        SpotifyApi api = new SpotifyApi.Builder()
+                .setClientId(clientId)
+                .setClientSecret(clientSecret)
+                .build();
+        api.setAccessToken(getAccessToken());
+        return api;
+    }
+
     private final TrackRepository trackRepository;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Track getTrackFromUrl(String url) {
         String trackId = extractTrackId(url);
 
-        SpotifyApi spotifyApi = new SpotifyApi.Builder()
-                .setClientId(clientId)
-                .setClientSecret(clientSecret)
-                .build();
-
         try {
-            ClientCredentialsRequest credentialsRequest = spotifyApi.clientCredentials().build();
-            ClientCredentials credentials = credentialsRequest.execute();
-            spotifyApi.setAccessToken(credentials.getAccessToken());
-
             se.michaelthelin.spotify.model_objects.specification.Track spotifyTrack =
-                    spotifyApi.getTrack(trackId).build().execute();
+                    authorizedApi().getTrack(trackId).build().execute();
 
             String title = spotifyTrack.getName();
             String artist = Arrays.stream(spotifyTrack.getArtists())
@@ -111,24 +136,16 @@ public class SpotifyTrackService {
 
     @Transactional
     public PlatformTrack searchTrack(Track track, Platform platform) {
-        SpotifyApi spotifyApi = new SpotifyApi.Builder()
-                .setClientId(clientId)
-                .setClientSecret(clientSecret)
-                .build();
-
         try {
-            ClientCredentialsRequest credentialsRequest = spotifyApi.clientCredentials().build();
-            ClientCredentials credentials = credentialsRequest.execute();
-            spotifyApi.setAccessToken(credentials.getAccessToken());
-
             String query;
             if (track.getIsrc() != null) {
                 query = "isrc:" + track.getIsrc();
             } else {
-                query = "track:" + track.getTitle() + " artist:" + track.getArtist();
+                String cleanArtist = cleanArtistForSearch(track.getArtist());
+                query = "track:" + track.getTitle() + " artist:" + cleanArtist;
             }
 
-            var results = spotifyApi.searchTracks(query).build().execute();
+            var results = authorizedApi().searchTracks(query).build().execute();
             if (results.getItems().length == 0) return null;
 
             var item = results.getItems()[0];
@@ -158,5 +175,11 @@ public class SpotifyTrackService {
         } catch (Exception e) {
             throw new RuntimeException("Spotify search failed: " + e.getMessage(), e);
         }
+    }
+
+    // "엠씨더맥스 (M.C the MAX)" → "엠씨더맥스", "BTS (방탄소년단)" → "BTS"
+    private String cleanArtistForSearch(String artist) {
+        if (artist == null || artist.isBlank()) return "";
+        return artist.replaceAll("\\s*[\\(\\[].*?[\\)\\]]\\s*", " ").replaceAll("\\s+", " ").trim();
     }
 }

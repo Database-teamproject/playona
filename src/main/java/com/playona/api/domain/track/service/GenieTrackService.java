@@ -58,7 +58,7 @@ public class GenieTrackService {
         String stripped = ogTitle.replaceAll("\\s*-\\s*genie\\s*$", "").trim();
         int sep = stripped.lastIndexOf(" / ");
         String title  = sep > 0 ? stripped.substring(0, sep).trim() : stripped;
-        String artist = sep > 0 ? stripped.substring(sep + 3).trim() : null;
+        String artist = sep > 0 ? stripped.substring(sep + 3).trim() : "";
 
         Matcher imageMatcher = OG_IMAGE.matcher(html);
         String thumbnail = imageMatcher.find() ? imageMatcher.group(1) : null;

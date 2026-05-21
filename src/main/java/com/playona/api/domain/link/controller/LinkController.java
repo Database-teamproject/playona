@@ -3,6 +3,8 @@ package com.playona.api.domain.link.controller;
 import com.playona.api.domain.link.dto.LinkResponse;
 import com.playona.api.domain.link.service.LinkService;
 import com.playona.api.global.common.ApiResponse;
+import com.playona.api.global.config.LinkRateLimiter;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -16,14 +18,26 @@ import java.util.Map;
 public class LinkController {
 
   private final LinkService linkService;
+  private final LinkRateLimiter rateLimiter;
 
   @PostMapping
-  public ResponseEntity<ApiResponse<LinkResponse>> createLink(@RequestBody Map<String, String> body) {
+  public ResponseEntity<ApiResponse<LinkResponse>> createLink(
+      @RequestBody Map<String, String> body,
+      HttpServletRequest request) {
+    String ip = getClientIp(request);
+    if (!rateLimiter.tryAcquire(ip)) {
+      return ResponseEntity.status(429).body(ApiResponse.fail("요청이 너무 많습니다. 1분 후 다시 시도해주세요."));
+    }
     String url = body.get("url");
     if (url == null || url.isBlank()) {
       return ResponseEntity.badRequest().body(ApiResponse.fail("url은 필수입니다."));
     }
     return ResponseEntity.ok(ApiResponse.ok(linkService.createLink(url)));
+  }
+
+  private String getClientIp(HttpServletRequest request) {
+    String xff = request.getHeader("X-Forwarded-For");
+    return (xff != null && !xff.isBlank()) ? xff.split(",")[0].trim() : request.getRemoteAddr();
   }
 
   @GetMapping("/my")

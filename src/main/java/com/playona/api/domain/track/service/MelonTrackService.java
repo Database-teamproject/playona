@@ -50,7 +50,7 @@ public class MelonTrackService {
         // "제목 - 아티스트" 형식에서 마지막 " - " 기준으로 분리
         int sep = ogTitle.lastIndexOf(" - ");
         String title = sep > 0 ? ogTitle.substring(0, sep).trim() : ogTitle.trim();
-        String artist = sep > 0 ? ogTitle.substring(sep + 3).trim() : null;
+        String artist = sep > 0 ? ogTitle.substring(sep + 3).trim() : "";
 
         Matcher imageMatcher = OG_IMAGE.matcher(html);
         String thumbnail = imageMatcher.find() ? imageMatcher.group(1) : null;

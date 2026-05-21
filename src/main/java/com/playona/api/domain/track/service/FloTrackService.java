@@ -54,7 +54,7 @@ public class FloTrackService {
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> artistList = (List<Map<String, Object>>) data.get("artistList");
         String artist = (artistList != null && !artistList.isEmpty())
-                ? (String) artistList.get(0).get("name") : null;
+                ? (String) artistList.get(0).get("name") : "";
 
         @SuppressWarnings("unchecked")
         Map<String, Object> album = (Map<String, Object>) data.get("album");
