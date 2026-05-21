@@ -44,10 +44,15 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
 
     if (oAuth2User.getAttribute("kakao_account") != null) {
       Long kakaoId = oAuth2User.getAttribute("id");
-      email = "kakao_" + kakaoId + "@playona.com";
 
       Map<?, ?> kakaoAccount = oAuth2User.getAttribute("kakao_account");
       Map<?, ?> profile = (kakaoAccount != null) ? (Map<?, ?>) kakaoAccount.get("profile") : null;
+
+      String kakaoEmail = (kakaoAccount != null) ? (String) kakaoAccount.get("email") : null;
+      email = (kakaoEmail != null && !kakaoEmail.isBlank())
+          ? kakaoEmail
+          : "kakao_" + kakaoId + "@playona.com";
+
       name = (profile != null && profile.get("nickname") != null)
           ? (String) profile.get("nickname")
           : "kakao_" + kakaoId;
