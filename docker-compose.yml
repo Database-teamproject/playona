@@ -37,6 +37,9 @@ services:
       APP_BASE_URL: https://playona-five.vercel.app
       OAUTH2_REDIRECT_URL: https://playona-five.vercel.app/auth/success
       KAKAO_REDIRECT_URI: https://playona-five.vercel.app/login/oauth2/code/kakao
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET}
     depends_on:
       db:
         condition: service_healthy
