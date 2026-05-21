@@ -70,10 +70,6 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
                     new User(UUID.randomUUID().toString(), email, name, picture)
             ));
 
-    if (picture != null && !picture.equals(user.getProfileImageUrl())) {
-      user.setProfileImageUrl(picture);
-    }
-
     // Access Token 발급
     String accessToken = jwtProvider.generateToken(user.getUserUuid());
 

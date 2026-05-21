@@ -42,7 +42,7 @@ public class UserService {
         if (oldUrl != null && oldUrl.contains(".amazonaws.com/")) {
             s3Service.deleteByUrl(oldUrl);
         }
-        return toUserResponse(user);
+        return toUserResponse(userRepository.save(user));
     }
 
     public UserResponse updateMyInfoByUuid(String userUuid, UpdateUserRequest request) {
@@ -53,7 +53,7 @@ public class UserService {
         if (request.getProfileImageUrl() != null) {
             user.setProfileImageUrl(request.getProfileImageUrl());
         }
-        return toUserResponse(user);
+        return toUserResponse(userRepository.save(user));
     }
 
     @Transactional(readOnly = true)
