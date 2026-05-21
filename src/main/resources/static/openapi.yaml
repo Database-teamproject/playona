@@ -488,8 +488,18 @@ paths:
       summary: 공유 링크 생성
       description: |
         플랫폼 URL을 입력하면 Playona 단축 링크를 생성합니다.
-        - 지원 입력 플랫폼: Spotify, YouTube Music, YouTube, Apple Music, Melon, Genie
-        - FLO는 입력 URL로 지원하지 않음 (검색 링크 매칭만 가능)
+
+        **지원 입력 URL 형식:**
+        | 플랫폼 | 예시 URL |
+        |--------|---------|
+        | Spotify | `https://open.spotify.com/track/{id}` |
+        | YouTube / YouTube Music | `https://youtu.be/{id}`, `https://music.youtube.com/watch?v={id}` |
+        | Apple Music | `https://music.apple.com/...` |
+        | Melon | `https://www.melon.com/song/detail.htm?songId={id}` |
+        | FLO | `https://www.music-flo.com/detail/track/{id}/details` |
+        | Genie (곡) | `https://www.genie.co.kr/detail/songInfo?xgnm={id}` |
+        | Genie (앨범) | `https://www.genie.co.kr/detail/albumInfo?axnm={id}` |
+
         - 비로그인도 가능
         - 링크 생성 시 모든 활성 플랫폼(Spotify, YouTube Music, Apple Music, Melon, FLO, Genie)에 자동 매칭
       security:
