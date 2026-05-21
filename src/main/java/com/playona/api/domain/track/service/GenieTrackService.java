@@ -24,11 +24,18 @@ public class GenieTrackService {
     private static final Pattern OG_TITLE = Pattern.compile("property=\"og:title\" content=\"([^\"]+)\"");
     private static final Pattern OG_IMAGE = Pattern.compile("property=\"og:image(?::secure_url)?\" content=\"(https://[^\"]+)\"");
     private static final Pattern SONG_ID   = Pattern.compile("[?&]xgnm=(\\d+)");
+    private static final Pattern ALBUM_ID  = Pattern.compile("[?&]axnm=(\\d+)");
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Track getTrackFromUrl(String url) {
-        String songId = extractSongId(url);
-        String sourceUrl = "https://www.genie.co.kr/detail/songInfo?xgnm=" + songId;
+        final String sourceUrl;
+        if (url.contains("albumInfo")) {
+            Matcher m = ALBUM_ID.matcher(url);
+            if (!m.find()) throw new IllegalArgumentException("Could not extract Genie albumId from URL: " + url);
+            sourceUrl = "https://www.genie.co.kr/detail/albumInfo?axnm=" + m.group(1);
+        } else {
+            sourceUrl = "https://www.genie.co.kr/detail/songInfo?xgnm=" + extractSongId(url);
+        }
 
         Track existing = trackRepository.findFirstBySourceUrl(sourceUrl).orElse(null);
         if (existing != null) return existing;
@@ -41,12 +48,12 @@ public class GenieTrackService {
                 .bodyToMono(String.class)
                 .block();
 
-        if (html == null) throw new RuntimeException("Genie 페이지 응답 없음: " + songId);
+        if (html == null) throw new RuntimeException("Genie 페이지 응답 없음: " + sourceUrl);
 
         Matcher titleMatcher = OG_TITLE.matcher(html);
-        if (!titleMatcher.find()) throw new RuntimeException("Genie 곡 정보를 찾을 수 없습니다: " + songId);
+        if (!titleMatcher.find()) throw new RuntimeException("Genie 곡 정보를 찾을 수 없습니다: " + sourceUrl);
 
-        // "제목 / 아티스트 - genie" 형식
+        // "제목 / 아티스트 - genie" 형식 (songInfo, albumInfo 공통)
         String ogTitle = titleMatcher.group(1);
         String stripped = ogTitle.replaceAll("\\s*-\\s*genie\\s*$", "").trim();
         int sep = stripped.lastIndexOf(" / ");

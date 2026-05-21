@@ -40,6 +40,7 @@ public class LinkService {
     private final UserRepository userRepository;
     private final AppleTrackService appleTrackService;
     private final MelonTrackService melonTrackService;
+    private final FloTrackService floTrackService;
     private final GenieTrackService genieTrackService;
     private final YoutubeTrackService youtubeTrackService;
     private final SpotifyTrackService spotifyTrackService;
@@ -83,10 +84,12 @@ public class LinkService {
             return appleTrackService.getTrackFromUrl(url);
         } else if (url.contains("melon.com")) {
             return melonTrackService.getTrackFromUrl(url);
+        } else if (url.contains("music-flo.com")) {
+            return floTrackService.getTrackFromUrl(url);
         } else if (url.contains("genie.co.kr")) {
             return genieTrackService.getTrackFromUrl(url);
         }
-        throw new IllegalArgumentException("지원하지 않는 플랫폼 URL입니다. (지원: Spotify, YouTube, Apple Music, Melon, Genie)");
+        throw new IllegalArgumentException("지원하지 않는 플랫폼 URL입니다. (지원: Spotify, YouTube, Apple Music, Melon, FLO, Genie)");
     }
 
     private String generateShortCode() {

@@ -3,13 +3,80 @@ package com.playona.api.domain.track.service;
 import com.playona.api.domain.platform.entity.Platform;
 import com.playona.api.domain.platform.entity.PlatformTrack;
 import com.playona.api.domain.track.entity.Track;
+import com.playona.api.domain.track.repository.TrackRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.reactive.function.client.WebClient;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
+@RequiredArgsConstructor
 public class FloTrackService {
+
+    private final TrackRepository trackRepository;
+
+    private static final Pattern TRACK_ID = Pattern.compile("/detail/track/(\\d+)");
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public Track getTrackFromUrl(String url) {
+        String trackId = extractTrackId(url);
+        String sourceUrl = "https://www.music-flo.com/detail/track/" + trackId + "/details";
+
+        Track existing = trackRepository.findFirstBySourceUrl(sourceUrl).orElse(null);
+        if (existing != null) return existing;
+
+        String apiUrl = "https://www.music-flo.com/api/meta/v1/track/" + trackId;
+        Map<String, Object> response = WebClient.create()
+                .get()
+                .uri(java.net.URI.create(apiUrl))
+                .header("User-Agent", "Mozilla/5.0")
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {})
+                .block();
+
+        if (response == null || !"2000000".equals(response.get("code"))) {
+            throw new RuntimeException("FLO API 응답 오류: " + trackId);
+        }
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = (Map<String, Object>) response.get("data");
+        String title = (String) data.get("name");
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> artistList = (List<Map<String, Object>>) data.get("artistList");
+        String artist = (artistList != null && !artistList.isEmpty())
+                ? (String) artistList.get(0).get("name") : null;
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> album = (Map<String, Object>) data.get("album");
+        String thumbnail = null;
+        if (album != null) {
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> imgList = (List<Map<String, Object>>) album.get("imgList");
+            if (imgList != null) {
+                thumbnail = imgList.stream()
+                        .filter(img -> {
+                            Object size = img.get("size");
+                            return size instanceof Number && ((Number) size).intValue() == 500;
+                        })
+                        .map(img -> (String) img.get("url"))
+                        .findFirst()
+                        .orElse(imgList.isEmpty() ? null : (String) imgList.get(0).get("url"));
+            }
+        }
+
+        Track track = new Track(title, artist, thumbnail, sourceUrl);
+        return trackRepository.save(track);
+    }
 
     public PlatformTrack searchTrack(Track track, Platform platform) {
         if (track.getTitle() == null) return null;
@@ -21,5 +88,11 @@ public class FloTrackService {
         String searchUrl = "https://www.music-flo.com/search?query=" + query;
 
         return new PlatformTrack(track, platform, null, searchUrl, track.getTitle(), track.getArtist());
+    }
+
+    private String extractTrackId(String url) {
+        Matcher m = TRACK_ID.matcher(url);
+        if (m.find()) return m.group(1);
+        throw new IllegalArgumentException("Could not extract FLO trackId from URL: " + url);
     }
 }
