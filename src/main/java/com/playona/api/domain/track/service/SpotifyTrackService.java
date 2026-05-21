@@ -134,7 +134,7 @@ public class SpotifyTrackService {
         throw new IllegalArgumentException("Not a valid Spotify URL: " + url);
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public PlatformTrack searchTrack(Track track, Platform platform) {
         try {
             String query;

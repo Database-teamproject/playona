@@ -323,7 +323,7 @@ public class YoutubeTrackService {
 
   private String extractVideoId(String url) {
     if (url == null || url.isBlank()) {
-      throw new RuntimeException("YouTube URL is empty");
+      throw new IllegalArgumentException("YouTube URL is empty");
     }
 
     if (url.contains("youtu.be/")) {
@@ -334,7 +334,7 @@ public class YoutubeTrackService {
       return url.split("v=")[1].split("&")[0];
     }
 
-    throw new RuntimeException("Not a valid YouTube URL: " + url);
+    throw new IllegalArgumentException("유튜브 개별 영상 URL을 입력해주세요. (재생목록, 채널 URL은 지원하지 않습니다)");
   }
 
   private Integer parseIsoDurationToMillis(String isoDuration) {
