@@ -128,7 +128,12 @@ public class AppleTrackService {
       // 1. ISRC 기반 매칭 우선
       if (track.getIsrc() != null && !track.getIsrc().isBlank()) {
         PlatformTrack byIsrc = searchAppleByIsrc(track, platform, track.getIsrc());
-        if (byIsrc != null) return byIsrc;
+        if (byIsrc != null) {
+          // Apple KR 제목이 한국어이고 현재 Track 제목이 비한국어이면 업데이트
+          // (Through the Night → 밤편지 등) — 이후 Melon/Genie 검색도 한국어로 진행됨
+          updateToKoreanTitle(track, byIsrc.getTitle());
+          return byIsrc;
+        }
       }
 
       // 2. ISRC 없거나 조회 실패 시 title+artist 검색 (유사도 검사 포함)
@@ -235,6 +240,18 @@ public class AppleTrackService {
     int maxLen = Math.max(na.length(), nb.length());
     if (minLen < maxLen * 0.5) return false;
     return na.contains(nb) || nb.contains(na);
+  }
+
+  /** Track 제목이 비한국어이고 Apple KR 제목이 한국어이면 Track 제목 업데이트 */
+  private void updateToKoreanTitle(Track track, String appleTitle) {
+    if (appleTitle == null || track.getTitle() == null) return;
+    boolean trackHasKorean = track.getTitle().matches(".*[가-힣].*");
+    boolean appleHasKorean = appleTitle.matches(".*[가-힣].*");
+    if (!trackHasKorean && appleHasKorean) {
+      log.info("[Apple] 한국어 제목으로 업데이트: '{}' → '{}'", track.getTitle(), appleTitle);
+      track.setTitle(appleTitle);
+      trackRepository.save(track);
+    }
   }
 
   /** 아이유↔IU처럼 한쪽은 라틴, 다른쪽은 한글/CJK인 경우 true (동일 아티스트 가능성) */
