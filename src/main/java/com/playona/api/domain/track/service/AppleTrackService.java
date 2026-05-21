@@ -61,7 +61,7 @@ public class AppleTrackService {
     String artist = (String) item.get("artistName");
     String album = (String) item.get("collectionName");
     String isrc = (String) item.get("isrc");
-    String sourceUrl = (String) item.get("trackViewUrl");
+    String sourceUrl = cleanAppleUrl((String) item.get("trackViewUrl"));
     String thumbnail = (String) item.get("artworkUrl100");
 
     Integer durationMs = null;
@@ -159,8 +159,7 @@ public class AppleTrackService {
 
     if (trackId == null || url == null) return null;
 
-    String krUrl = url.replaceFirst("music\\.apple\\.com/[a-z]{2}/", "music.apple.com/kr/");
-    return new PlatformTrack(track, platform, trackId, krUrl, title, artist);
+    return new PlatformTrack(track, platform, trackId, cleanAppleUrl(url), title, artist);
   }
 
   private PlatformTrack searchAppleByTitleArtist(Track track, Platform platform) {
@@ -215,7 +214,7 @@ public class AppleTrackService {
         String url = (String) item.get("trackViewUrl");
         if (trackId == null || url == null) continue;
 
-        String krUrl = url.replaceFirst("music\\.apple\\.com/[a-z]{2}/", "music.apple.com/kr/");
+        String krUrl = cleanAppleUrl(url);
         log.info("[Apple] 매칭 성공: '{}' - '{}'", resultTitle, krUrl);
         return new PlatformTrack(track, platform, trackId, krUrl, resultTitle, resultArtist);
       }
@@ -235,6 +234,13 @@ public class AppleTrackService {
     int maxLen = Math.max(na.length(), nb.length());
     if (minLen < maxLen * 0.5) return false;
     return na.contains(nb) || nb.contains(na);
+  }
+
+  private String cleanAppleUrl(String url) {
+    if (url == null) return null;
+    return url.replaceFirst("music\\.apple\\.com/[a-z]{2}/", "music.apple.com/kr/")
+              .replaceAll("[?&]uo=\\d+", "")
+              .replaceAll("\\?$", "");
   }
 
   private Map getAppleResponseAsMap(String url, String errorMessage) {

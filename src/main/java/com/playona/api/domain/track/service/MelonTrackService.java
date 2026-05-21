@@ -62,10 +62,7 @@ public class MelonTrackService {
     public PlatformTrack searchTrack(Track track, Platform platform) {
         if (track.getTitle() == null) return null;
 
-        String mainArtist = track.getArtist() != null
-                ? track.getArtist().split("[,&]")[0].trim()
-                : "";
-        String query = URLEncoder.encode(track.getTitle() + " " + mainArtist, StandardCharsets.UTF_8);
+        String query = URLEncoder.encode(track.getTitle(), StandardCharsets.UTF_8);
         String searchUrl = "https://www.melon.com/search/song/index.htm#searchedKeyword=" + query;
 
         return new PlatformTrack(track, platform, null, searchUrl, track.getTitle(), track.getArtist());
