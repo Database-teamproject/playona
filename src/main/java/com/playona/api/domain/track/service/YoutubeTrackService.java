@@ -27,7 +27,6 @@ public class YoutubeTrackService {
   private String apiKey;
 
   private final TrackRepository trackRepository;
-  private final SpotifyTrackService spotifyTrackService;
   private final WebClient webClient = WebClient.create("https://www.googleapis.com");
 
   @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -105,21 +104,6 @@ public class YoutubeTrackService {
     }
 
     newTrack.setAlbum(null);
-
-    // iTunes KR → Spotify 순으로 정식 제목/아티스트/ISRC 보정
-    try {
-      String itunesCanonicalTitle = lookupItunesKrTitle(title, artist);
-      if (itunesCanonicalTitle != null) {
-        newTrack.setTitle(itunesCanonicalTitle);
-      } else {
-        SpotifyTrackService.CanonicalMeta meta = spotifyTrackService.lookupCanonical(title, artist);
-        if (meta != null) {
-          newTrack.setTitle(meta.title());
-          newTrack.setArtist(meta.artist());
-          if (meta.isrc() != null) newTrack.setIsrc(meta.isrc());
-        }
-      }
-    } catch (Exception ignored) {}
 
     return trackRepository.save(newTrack);
   }
@@ -338,25 +322,6 @@ public class YoutubeTrackService {
     }
 
     return cleaned.isEmpty() ? title : cleaned;
-  }
-
-  private String lookupItunesKrTitle(String title, String artist) {
-    try {
-      String query = java.net.URLEncoder.encode(title + " " + artist, java.nio.charset.StandardCharsets.UTF_8);
-      String url = "https://itunes.apple.com/search?term=" + query + "&entity=song&limit=1&country=kr";
-      Map response = webClient.get()
-          .uri(java.net.URI.create(url))
-          .retrieve()
-          .bodyToMono(Map.class)
-          .block();
-      if (response == null) return null;
-      List results = (List) response.get("results");
-      if (results == null || results.isEmpty()) return null;
-      Map item = (Map) results.get(0);
-      return (String) item.get("trackName");
-    } catch (Exception e) {
-      return null;
-    }
   }
 
   private String extractVideoId(String url) {
