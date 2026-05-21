@@ -31,6 +31,18 @@ public class LinkController {
     return ResponseEntity.ok(ApiResponse.ok(linkService.getMyLinks(userUuid)));
   }
 
+  @DeleteMapping("/{shortCode}")
+  public ResponseEntity<ApiResponse<?>> deleteLink(
+      @PathVariable String shortCode,
+      @AuthenticationPrincipal String userUuid
+  ) {
+    if (userUuid == null) {
+      return ResponseEntity.status(401).body(ApiResponse.fail("로그인이 필요합니다."));
+    }
+    linkService.deleteLink(shortCode, userUuid);
+    return ResponseEntity.ok(ApiResponse.ok(null));
+  }
+
   @GetMapping("/{shortCode}")
   public ResponseEntity<ApiResponse<?>> getLink(@PathVariable String shortCode) {
     return ResponseEntity.ok(ApiResponse.ok(linkService.getLinkResponse(shortCode)));

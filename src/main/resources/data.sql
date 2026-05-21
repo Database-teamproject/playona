@@ -1,12 +1,12 @@
 INSERT INTO platforms (slug, name, url_pattern, logo_url, is_active, created_at, updated_at)
 VALUES
-    ('spotify',  'Spotify',       'https://open.spotify.com/track/{id}',   null, true,  NOW(), NOW()),
-    ('ytmusic',  'YouTube Music', 'https://music.youtube.com/watch?v={id}', null, true,  NOW(), NOW()),
-    ('apple',    'Apple Music',   'https://music.apple.com/album/{id}',     null, true,  NOW(), NOW())
+    ('spotify',  'Spotify',       'https://open.spotify.com/track/{id}',                           null, true,  NOW(), NOW()),
+    ('ytmusic',  'YouTube Music', 'https://music.youtube.com/watch?v={id}',                        null, true,  NOW(), NOW()),
+    ('apple',    'Apple Music',   'https://music.apple.com/album/{id}',                            null, true,  NOW(), NOW()),
+    ('melon',    'Melon',         'https://www.melon.com/search/song/index.htm#searchedKeyword={q}', null, true, NOW(), NOW())
     ON CONFLICT (slug) DO NOTHING;
 
--- Melon은 서비스하지 않으므로 비활성화 (이미 DB에 들어가 있는 경우 대비)
-UPDATE platforms SET is_active = false WHERE slug = 'melon';
+UPDATE platforms SET is_active = true WHERE slug = 'melon';
 
 -- 기존 tracks rows 중 track_uuid 없는 행 UUID 채우기 (스키마 마이그레이션 대응)
 UPDATE tracks SET track_uuid = gen_random_uuid()::text WHERE track_uuid IS NULL;

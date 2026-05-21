@@ -13,4 +13,5 @@ public interface SharedLinkRepository extends JpaRepository<SharedLink, Long> {
   Optional<SharedLink> findByShortCode(String shortCode);
   List<SharedLink> findByUserOrderByCreatedAtDesc(User user);
   boolean existsByShortCode(String shortCode);
+  Optional<SharedLink> findByShortCodeAndUser(String shortCode, User user);
 }

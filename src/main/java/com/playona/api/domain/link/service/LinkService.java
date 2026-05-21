@@ -149,6 +149,15 @@ public class LinkService {
             .toList();
     }
 
+    @Transactional
+    public void deleteLink(String shortCode, String userUuid) {
+        User user = userRepository.findByUserUuid(userUuid)
+                .orElseThrow(() -> new NotFoundException("사용자를 찾을 수 없습니다."));
+        SharedLink link = sharedLinkRepository.findByShortCodeAndUser(shortCode, user)
+                .orElseThrow(() -> new NotFoundException("링크를 찾을 수 없거나 삭제 권한이 없습니다."));
+        sharedLinkRepository.delete(link);
+    }
+
     @Transactional(readOnly = true)
     public List<LinkResponse> getMyLinks(String userUuid) {
         return userRepository.findByUserUuid(userUuid)
