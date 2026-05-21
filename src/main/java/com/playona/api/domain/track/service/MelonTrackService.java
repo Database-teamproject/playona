@@ -62,42 +62,10 @@ public class MelonTrackService {
     public PlatformTrack searchTrack(Track track, Platform platform) {
         if (track.getTitle() == null) return null;
 
-        String searchTitle = resolveKoreanTitle(track);
-        String query = URLEncoder.encode(searchTitle, StandardCharsets.UTF_8);
+        String query = URLEncoder.encode(track.getTitle(), StandardCharsets.UTF_8);
         String searchUrl = "https://www.melon.com/search/song/index.htm#q=" + query;
 
         return new PlatformTrack(track, platform, null, searchUrl, track.getTitle(), track.getArtist());
-    }
-
-    private String resolveKoreanTitle(Track track) {
-        if (track.getIsrc() == null || track.getIsrc().isBlank()) return track.getTitle();
-        try {
-            String url = "https://itunes.apple.com/lookup?isrc=" + track.getIsrc() + "&country=kr";
-            String body = WebClient.create().get()
-                    .uri(java.net.URI.create(url))
-                    .retrieve().bodyToMono(String.class).block();
-            if (body == null) return track.getTitle();
-            com.fasterxml.jackson.databind.ObjectMapper om = new com.fasterxml.jackson.databind.ObjectMapper();
-            java.util.Map<?, ?> resp = om.readValue(body, java.util.Map.class);
-            java.util.List<?> results = (java.util.List<?>) resp.get("results");
-            if (results == null || results.isEmpty()) return track.getTitle();
-            Object trackName = ((java.util.Map<?, ?>) results.get(0)).get("trackName");
-            if (trackName == null) return track.getTitle();
-            return extractKoreanTitle(trackName.toString(), track.getTitle());
-        } catch (Exception e) {
-            return track.getTitle();
-        }
-    }
-
-    private String extractKoreanTitle(String itunesTitle, String fallback) {
-        // "Square's dream (네모의 꿈)" → "네모의 꿈"
-        java.util.regex.Matcher m = java.util.regex.Pattern
-                .compile("[\\(（]([^\\)）]*[가-힣][^\\)）]*)[\\)）]")
-                .matcher(itunesTitle);
-        if (m.find()) return m.group(1).trim();
-        // 제목 자체가 한국어면 그대로
-        if (itunesTitle.matches(".*[가-힣].*")) return itunesTitle;
-        return fallback;
     }
 
     private String extractSongId(String url) {
