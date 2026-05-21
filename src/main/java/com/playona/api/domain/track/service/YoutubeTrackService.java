@@ -106,13 +106,18 @@ public class YoutubeTrackService {
 
     newTrack.setAlbum(null);
 
-    // Spotify로 정식 제목/아티스트/ISRC 보정 (YouTube는 영어 번역 제목 반환 가능)
+    // iTunes KR → Spotify 순으로 정식 제목/아티스트/ISRC 보정
     try {
-      SpotifyTrackService.CanonicalMeta meta = spotifyTrackService.lookupCanonical(title, artist);
-      if (meta != null) {
-        newTrack.setTitle(meta.title());
-        newTrack.setArtist(meta.artist());
-        if (meta.isrc() != null) newTrack.setIsrc(meta.isrc());
+      String itunesCanonicalTitle = lookupItunesKrTitle(title, artist);
+      if (itunesCanonicalTitle != null) {
+        newTrack.setTitle(itunesCanonicalTitle);
+      } else {
+        SpotifyTrackService.CanonicalMeta meta = spotifyTrackService.lookupCanonical(title, artist);
+        if (meta != null) {
+          newTrack.setTitle(meta.title());
+          newTrack.setArtist(meta.artist());
+          if (meta.isrc() != null) newTrack.setIsrc(meta.isrc());
+        }
       }
     } catch (Exception ignored) {}
 
@@ -333,6 +338,25 @@ public class YoutubeTrackService {
     }
 
     return cleaned.isEmpty() ? title : cleaned;
+  }
+
+  private String lookupItunesKrTitle(String title, String artist) {
+    try {
+      String query = java.net.URLEncoder.encode(title + " " + artist, java.nio.charset.StandardCharsets.UTF_8);
+      String url = "https://itunes.apple.com/search?term=" + query + "&entity=song&limit=1&country=kr";
+      Map response = webClient.get()
+          .uri(java.net.URI.create(url))
+          .retrieve()
+          .bodyToMono(Map.class)
+          .block();
+      if (response == null) return null;
+      List results = (List) response.get("results");
+      if (results == null || results.isEmpty()) return null;
+      Map item = (Map) results.get(0);
+      return (String) item.get("trackName");
+    } catch (Exception e) {
+      return null;
+    }
   }
 
   private String extractVideoId(String url) {
