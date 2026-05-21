@@ -3,10 +3,12 @@ VALUES
     ('spotify',  'Spotify',       'https://open.spotify.com/track/{id}',                           null, true,  NOW(), NOW()),
     ('ytmusic',  'YouTube Music', 'https://music.youtube.com/watch?v={id}',                        null, true,  NOW(), NOW()),
     ('apple',    'Apple Music',   'https://music.apple.com/album/{id}',                            null, true,  NOW(), NOW()),
-    ('melon',    'Melon',         'https://www.melon.com/search/song/index.htm#searchedKeyword={q}', null, true, NOW(), NOW())
+    ('melon',    'Melon',         'https://www.melon.com/search/song/index.htm#searchedKeyword={q}', null, true, NOW(), NOW()),
+    ('flo',      'FLO',           'https://www.music-flo.com/search?query={q}',                      null, true, NOW(), NOW()),
+    ('genie',    'Genie',         'https://www.genie.co.kr/search/searchMain?query={q}',              null, true, NOW(), NOW())
     ON CONFLICT (slug) DO NOTHING;
 
-UPDATE platforms SET is_active = true WHERE slug = 'melon';
+UPDATE platforms SET is_active = true WHERE slug IN ('melon', 'flo', 'genie');
 
 -- 기존 tracks rows 중 track_uuid 없는 행 UUID 채우기 (스키마 마이그레이션 대응)
 UPDATE tracks SET track_uuid = gen_random_uuid()::text WHERE track_uuid IS NULL;

@@ -317,6 +317,50 @@ paths:
                       data:
                         $ref: '#/components/schemas/UserResponse'
 
+  /api/users/me/profile-image:
+    post:
+      tags: [유저]
+      summary: 프로필 이미지 업로드
+      description: |
+        이미지 파일을 S3에 업로드하고 프로필 이미지 URL을 업데이트합니다.
+        - 허용 형식: image/* (jpg, png, webp 등)
+        - 최대 크기: 5MB
+        - 기존 S3 이미지는 자동 삭제됩니다
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: 업로드할 이미지 파일
+      responses:
+        '200':
+          description: 업로드 성공
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/UserResponse'
+        '400':
+          description: 이미지 파일이 아니거나 5MB 초과
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 인증 필요
+
   /api/users/me/platforms:
     get:
       tags: [유저]
@@ -444,9 +488,10 @@ paths:
       summary: 공유 링크 생성
       description: |
         플랫폼 URL을 입력하면 Playona 단축 링크를 생성합니다.
-        - 지원 플랫폼: Spotify, YouTube Music, YouTube
+        - 지원 입력 플랫폼: Spotify, YouTube Music, YouTube, Apple Music, Melon, Genie
+        - FLO는 입력 URL로 지원하지 않음 (검색 링크 매칭만 가능)
         - 비로그인도 가능
-        - 링크 생성 시 모든 활성 플랫폼에 대해 자동 매칭
+        - 링크 생성 시 모든 활성 플랫폼(Spotify, YouTube Music, Apple Music, Melon, FLO, Genie)에 자동 매칭
       security:
         - bearerAuth: []
         - {}
@@ -528,6 +573,38 @@ paths:
                         $ref: '#/components/schemas/SharedLinkResponse'
         '404':
           description: 링크 없음
+
+    delete:
+      tags: [공유링크]
+      summary: 공유 링크 삭제
+      description: |
+        본인이 생성한 링크를 삭제합니다.
+        - 로그인 필수
+        - 본인 링크가 아닐 경우 404 반환
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: shortCode
+          in: path
+          required: true
+          schema:
+            type: string
+            example: abc123
+      responses:
+        '200':
+          description: 삭제 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '401':
+          description: 인증 필요
+        '404':
+          description: 링크 없음 또는 삭제 권한 없음
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/links/{shortCode}/redirect:
     get:

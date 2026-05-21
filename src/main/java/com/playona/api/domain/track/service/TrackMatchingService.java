@@ -24,6 +24,8 @@ public class TrackMatchingService {
     private final YoutubeTrackService youtubeTrackService;
     private final AppleTrackService appleTrackService;
     private final MelonTrackService melonTrackService;
+    private final FloTrackService floTrackService;
+    private final GenieTrackService genieTrackService;
 
     // REQUIRES_NEW: 호출자(createLink)의 트랜잭션과 독립적으로 실행
     // 플랫폼 매칭 실패 시 createLink 전체가 롤백되는 것을 방지
@@ -55,7 +57,9 @@ public class TrackMatchingService {
             case "spotify" -> spotifyTrackService.searchTrack(track, platform);
             case "ytmusic" -> youtubeTrackService.searchTrack(track, platform);
             case "apple" -> appleTrackService.searchTrack(track, platform);
-            case "melon" -> melonTrackService.searchTrack(track, platform);
+            case "melon"  -> melonTrackService.searchTrack(track, platform);
+            case "flo"    -> floTrackService.searchTrack(track, platform);
+            case "genie"  -> genieTrackService.searchTrack(track, platform);
             default -> null;
         };
     }
