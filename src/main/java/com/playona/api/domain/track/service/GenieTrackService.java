@@ -90,10 +90,22 @@ public class GenieTrackService {
             java.util.List<?> results = (java.util.List<?>) resp.get("results");
             if (results == null || results.isEmpty()) return track.getTitle();
             Object trackName = ((java.util.Map<?, ?>) results.get(0)).get("trackName");
-            return trackName != null ? trackName.toString() : track.getTitle();
+            if (trackName == null) return track.getTitle();
+            return extractKoreanTitle(trackName.toString(), track.getTitle());
         } catch (Exception e) {
             return track.getTitle();
         }
+    }
+
+    private String extractKoreanTitle(String itunesTitle, String fallback) {
+        // "Square's dream (네모의 꿈)" → "네모의 꿈"
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("[\\(（]([^\\)）]*[가-힣][^\\)）]*)[\\)）]")
+                .matcher(itunesTitle);
+        if (m.find()) return m.group(1).trim();
+        // 제목 자체가 한국어면 그대로
+        if (itunesTitle.matches(".*[가-힣].*")) return itunesTitle;
+        return fallback;
     }
 
     private String extractSongId(String url) {
