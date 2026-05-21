@@ -65,6 +65,8 @@ public class YoutubeTrackService {
     Map localized = snippet != null ? (Map) snippet.get("localized") : null;
     String localizedTitle = localized != null ? (String) localized.get("title") : null;
     String rawTitle = (localizedTitle != null && !localizedTitle.isBlank()) ? localizedTitle : (snippet != null ? (String) snippet.get("title") : null);
+    // "Square's dream (네모의 꿈)" → "네모의 꿈" (괄호 안 한국어가 있으면 추출)
+    rawTitle = extractKoreanIfPresent(rawTitle);
     String rawArtist = snippet != null ? (String) snippet.get("channelTitle") : null;
     String artist = cleanArtist(rawArtist);
     String title = cleanTitle(rawTitle, artist);
@@ -322,6 +324,15 @@ public class YoutubeTrackService {
     }
 
     return cleaned.isEmpty() ? title : cleaned;
+  }
+
+  private String extractKoreanIfPresent(String title) {
+    if (title == null) return null;
+    java.util.regex.Matcher m = java.util.regex.Pattern
+        .compile("[\\(（]([^\\)）]*[가-힣][^\\)）]*)[\\)）]")
+        .matcher(title);
+    if (m.find()) return m.group(1).trim();
+    return title;
   }
 
   private String extractVideoId(String url) {
