@@ -30,6 +30,7 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 
 	implementation 'se.michaelthelin.spotify:spotify-web-api-java:9.3.0'
+	implementation 'software.amazon.awssdk:s3:2.25.11'
 
 	compileOnly 'org.projectlombok:lombok'
 	annotationProcessor 'org.projectlombok:lombok'

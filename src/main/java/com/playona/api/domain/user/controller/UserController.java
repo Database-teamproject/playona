@@ -7,9 +7,11 @@ import com.playona.api.domain.user.dto.UserResponse;
 import com.playona.api.domain.user.service.UserService;
 import com.playona.api.global.common.ApiResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -33,6 +35,14 @@ public class UserController {
             @RequestBody UpdateUserRequest request
     ) {
         return ResponseEntity.ok(ApiResponse.ok(userService.updateMyInfoByUuid(userUuid, request)));
+    }
+
+    @PostMapping(value = "/profile-image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<UserResponse>> uploadProfileImage(
+            @AuthenticationPrincipal String userUuid,
+            @RequestPart("file") MultipartFile file
+    ) {
+        return ResponseEntity.ok(ApiResponse.ok(userService.uploadProfileImage(userUuid, file)));
     }
 
     @GetMapping("/platforms")

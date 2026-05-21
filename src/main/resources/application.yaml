@@ -78,3 +78,11 @@ oauth2:
 
 app:
   base-url: ${APP_BASE_URL:http://localhost:3000}
+
+aws:
+  s3:
+    bucket: ${AWS_S3_BUCKET:playona-profile-images}
+    region: ${AWS_S3_REGION:ap-northeast-2}
+  credentials:
+    access-key: ${AWS_ACCESS_KEY_ID:}
+    secret-key: ${AWS_SECRET_ACCESS_KEY:}

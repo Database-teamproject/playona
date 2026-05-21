@@ -10,9 +10,11 @@ import com.playona.api.domain.user.entity.User;
 import com.playona.api.domain.user.entity.UserPlatformPreference;
 import com.playona.api.domain.user.repository.UserPlatformPreferenceRepository;
 import com.playona.api.domain.user.repository.UserRepository;
+import com.playona.api.global.config.S3Service;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Comparator;
 import java.util.List;
@@ -25,10 +27,22 @@ public class UserService {
     private final UserRepository userRepository;
     private final PlatformRepository platformRepository;
     private final UserPlatformPreferenceRepository preferenceRepository;
+    private final S3Service s3Service;
 
     @Transactional(readOnly = true)
     public UserResponse getMyInfoByUuid(String userUuid) {
         return toUserResponse(getUserByUuidOrThrow(userUuid));
+    }
+
+    public UserResponse uploadProfileImage(String userUuid, MultipartFile file) {
+        User user = getUserByUuidOrThrow(userUuid);
+        String oldUrl = user.getProfileImageUrl();
+        String newUrl = s3Service.uploadProfileImage(userUuid, file);
+        user.setProfileImageUrl(newUrl);
+        if (oldUrl != null && oldUrl.contains(".amazonaws.com/")) {
+            s3Service.deleteByUrl(oldUrl);
+        }
+        return toUserResponse(user);
     }
 
     public UserResponse updateMyInfoByUuid(String userUuid, UpdateUserRequest request) {
