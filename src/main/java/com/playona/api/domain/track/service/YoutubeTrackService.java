@@ -251,7 +251,11 @@ public class YoutubeTrackService {
         || lower.contains("가사") || lower.contains("lyrics") || lower.contains("lyric")
         || lower.contains("cover") || lower.contains("커버") || lower.contains("reaction")
         || lower.contains("music video") || lower.contains("뮤직비디오") || lower.contains("뮤비")
-        || lower.matches(".*\\bmv\\b.*");  // " MV" 단어 단위 (remix/mv 구분)
+        || lower.contains("노래방") || lower.contains("karaoke") || lower.contains("반주")
+        || lower.contains("레전드") || lower.contains("모음") || lower.contains("직캠")
+        || lower.contains("fancam") || lower.contains("소름") || lower.contains("remix")
+        || lower.matches(".*\\bmr\\b.*")
+        || lower.matches(".*\\bmv\\b.*");
   }
 
   /** 아티스트명과 채널명 유사도 체크 (공식 채널 판별) */

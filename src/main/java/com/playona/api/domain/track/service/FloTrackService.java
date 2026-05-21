@@ -75,6 +75,15 @@ public class FloTrackService {
         }
 
         Track track = new Track(title, artist, thumbnail, sourceUrl);
+
+        // "05:31" → milliseconds
+        String playTime = (String) data.get("playTime");
+        if (playTime != null && playTime.matches("\\d+:\\d+")) {
+            String[] parts = playTime.split(":");
+            int ms = (Integer.parseInt(parts[0]) * 60 + Integer.parseInt(parts[1])) * 1000;
+            track.setDurationMs(ms);
+        }
+
         return trackRepository.save(track);
     }
 
