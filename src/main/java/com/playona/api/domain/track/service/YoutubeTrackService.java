@@ -41,8 +41,9 @@ public class YoutubeTrackService {
     Map response = webClient.get()
             .uri(uriBuilder -> uriBuilder
                     .path("/youtube/v3/videos")
-                    .queryParam("part", "snippet,contentDetails")
+                    .queryParam("part", "snippet,contentDetails,localizations")
                     .queryParam("id", videoId)
+                    .queryParam("hl", "ko")
                     .queryParam("key", apiKey)
                     .build())
             .retrieve()
@@ -62,7 +63,9 @@ public class YoutubeTrackService {
     Map snippet = (Map) firstItem.get("snippet");
     Map contentDetails = (Map) firstItem.get("contentDetails");
 
-    String rawTitle = snippet != null ? (String) snippet.get("title") : null;
+    Map localized = snippet != null ? (Map) snippet.get("localized") : null;
+    String localizedTitle = localized != null ? (String) localized.get("title") : null;
+    String rawTitle = (localizedTitle != null && !localizedTitle.isBlank()) ? localizedTitle : (snippet != null ? (String) snippet.get("title") : null);
     String rawArtist = snippet != null ? (String) snippet.get("channelTitle") : null;
     String artist = cleanArtist(rawArtist);
     String title = cleanTitle(rawTitle, artist);
