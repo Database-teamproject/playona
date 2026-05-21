@@ -177,6 +177,26 @@ public class SpotifyTrackService {
         }
     }
 
+    public record CanonicalMeta(String title, String artist, String isrc) {}
+
+    public CanonicalMeta lookupCanonical(String title, String artist) {
+        try {
+            String cleanArtist = cleanArtistForSearch(artist);
+            String query = "track:" + title + " artist:" + cleanArtist;
+            var results = authorizedApi().searchTracks(query).limit(1).build().execute();
+            if (results.getItems().length == 0) return null;
+            var item = results.getItems()[0];
+            String isrc = (item.getExternalIds() != null)
+                    ? item.getExternalIds().getExternalIds().get("isrc") : null;
+            String canonicalArtist = Arrays.stream(item.getArtists())
+                    .map(ArtistSimplified::getName)
+                    .collect(Collectors.joining(", "));
+            return new CanonicalMeta(item.getName(), canonicalArtist, isrc);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     // "엠씨더맥스 (M.C the MAX)" → "엠씨더맥스", "BTS (방탄소년단)" → "BTS"
     private String cleanArtistForSearch(String artist) {
         if (artist == null || artist.isBlank()) return "";

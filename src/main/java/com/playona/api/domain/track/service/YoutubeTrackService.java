@@ -27,6 +27,7 @@ public class YoutubeTrackService {
   private String apiKey;
 
   private final TrackRepository trackRepository;
+  private final SpotifyTrackService spotifyTrackService;
   private final WebClient webClient = WebClient.create("https://www.googleapis.com");
 
   @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -101,6 +102,16 @@ public class YoutubeTrackService {
     }
 
     newTrack.setAlbum(null);
+
+    // Spotify로 정식 제목/아티스트/ISRC 보정 (YouTube는 영어 번역 제목 반환 가능)
+    try {
+      SpotifyTrackService.CanonicalMeta meta = spotifyTrackService.lookupCanonical(title, artist);
+      if (meta != null) {
+        newTrack.setTitle(meta.title());
+        newTrack.setArtist(meta.artist());
+        if (meta.isrc() != null) newTrack.setIsrc(meta.isrc());
+      }
+    } catch (Exception ignored) {}
 
     return trackRepository.save(newTrack);
   }
