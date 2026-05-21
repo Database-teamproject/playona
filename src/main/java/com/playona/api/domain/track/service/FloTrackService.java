@@ -78,15 +78,51 @@ public class FloTrackService {
         return trackRepository.save(track);
     }
 
+    @SuppressWarnings("unchecked")
     public PlatformTrack searchTrack(Track track, Platform platform) {
         if (track.getTitle() == null) return null;
 
         String mainArtist = track.getArtist() != null
                 ? track.getArtist().split("[,&]")[0].trim()
                 : "";
-        String query = URLEncoder.encode(track.getTitle() + " " + mainArtist, StandardCharsets.UTF_8);
-        String searchUrl = "https://www.music-flo.com/search?query=" + query;
+        String keyword = track.getTitle() + " " + mainArtist;
 
+        try {
+            String apiUrl = "https://www.music-flo.com/api/search/v2/search?keyword="
+                    + URLEncoder.encode(keyword, StandardCharsets.UTF_8)
+                    + "&searchType=TRACK&size=1";
+
+            Map<String, Object> response = WebClient.create()
+                    .get()
+                    .uri(java.net.URI.create(apiUrl))
+                    .header("User-Agent", "Mozilla/5.0")
+                    .retrieve()
+                    .bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {})
+                    .block();
+
+            if (response != null && "2000000".equals(response.get("code"))) {
+                Map<String, Object> data = (Map<String, Object>) response.get("data");
+                List<Map<String, Object>> groups = (List<Map<String, Object>>) data.get("list");
+                if (groups != null) {
+                    for (Map<String, Object> group : groups) {
+                        if ("TRACK".equals(group.get("type"))) {
+                            List<Map<String, Object>> tracks = (List<Map<String, Object>>) group.get("list");
+                            if (tracks != null && !tracks.isEmpty()) {
+                                Object id = tracks.get(0).get("id");
+                                if (id != null) {
+                                    String trackUrl = "https://www.music-flo.com/detail/track/" + id + "/details";
+                                    return new PlatformTrack(track, platform, null, trackUrl, track.getTitle(), track.getArtist());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+
+        // 검색 실패 시 검색 URL로 폴백
+        String searchUrl = "https://www.music-flo.com/search?query="
+                + URLEncoder.encode(keyword, StandardCharsets.UTF_8);
         return new PlatformTrack(track, platform, null, searchUrl, track.getTitle(), track.getArtist());
     }
 
