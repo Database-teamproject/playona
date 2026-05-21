@@ -204,7 +204,8 @@ public class AppleTrackService {
             ? track.getArtist().split("[,&]")[0].trim() : "";
         String mainResultArtist = resultArtist != null
             ? resultArtist.split("[,&]")[0].trim() : "";
-        if (!isSimilar(mainStoredArtist, mainResultArtist)) {
+        if (!isSimilar(mainStoredArtist, mainResultArtist)
+            && !isDifferentScript(mainStoredArtist, mainResultArtist)) {
           log.info("[Apple] 아티스트 불일치 skip: '{}' vs '{}'", mainStoredArtist, mainResultArtist);
           continue;
         }
@@ -236,10 +237,19 @@ public class AppleTrackService {
     return na.contains(nb) || nb.contains(na);
   }
 
+  /** 아이유↔IU처럼 한쪽은 라틴, 다른쪽은 한글/CJK인 경우 true (동일 아티스트 가능성) */
+  private boolean isDifferentScript(String a, String b) {
+    if (a == null || b == null) return false;
+    boolean aLatin = a.matches("[\\x00-\\x7F\\s]+");
+    boolean bLatin = b.matches("[\\x00-\\x7F\\s]+");
+    return aLatin != bLatin;
+  }
+
   private String cleanAppleUrl(String url) {
     if (url == null) return null;
     return url.replaceFirst("music\\.apple\\.com/[a-z]{2}/", "music.apple.com/kr/")
-              .replaceAll("[?&]uo=\\d+", "")
+              .replaceAll("\\?uo=\\d+&", "?")   // uo= 첫 번째 파라미터이고 뒤에 더 있는 경우
+              .replaceAll("[?&]uo=\\d+", "")     // uo= 마지막 또는 유일한 파라미터인 경우
               .replaceAll("\\?$", "");
   }
 
