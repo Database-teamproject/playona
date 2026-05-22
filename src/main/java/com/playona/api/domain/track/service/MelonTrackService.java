@@ -65,7 +65,7 @@ public class MelonTrackService {
         if (track.getTitle() == null) return null;
 
         String mainArtist = track.getArtist() != null ? track.getArtist().split("[,&]")[0].trim() : "";
-        String rawQuery = track.getTitle() + (mainArtist.isBlank() ? "" : " " + mainArtist);
+        String rawQuery = normalizeQuery(track.getTitle()) + (mainArtist.isBlank() ? "" : " " + normalizeQuery(mainArtist));
         String query = URLEncoder.encode(rawQuery, StandardCharsets.UTF_8).replace("+", "%20");
         String fallbackUrl = "https://www.melon.com/search/total/index.htm?q=" + query;
 
@@ -90,6 +90,11 @@ public class MelonTrackService {
         } catch (Exception ignored) {}
 
         return new PlatformTrack(track, platform, null, fallbackUrl, track.getTitle(), track.getArtist());
+    }
+
+        private static String normalizeQuery(String s) {
+        if (s == null) return "";
+        return s.replaceAll("[\u2018\u2019\u02bc\u00b4`]", "'");
     }
 
     private String extractSongId(String url) {

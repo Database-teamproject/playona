@@ -116,7 +116,7 @@ public class YoutubeTrackService {
     String mainArtist = cleanArtistForSearch(
         track.getArtist() != null ? track.getArtist().split(",")[0].trim() : ""
     );
-    String queryRaw = track.getTitle() + " " + mainArtist;
+    String queryRaw = normalizeQuery(track.getTitle()) + " " + normalizeQuery(mainArtist);
     String queryEncoded = URLEncoder.encode(queryRaw, java.nio.charset.StandardCharsets.UTF_8)
         .replace("+", "%20");
 
@@ -334,6 +334,11 @@ public class YoutubeTrackService {
         || lower.contains("쇼챔피언") || lower.contains("엠카운트다운") || lower.contains("뮤직쇼")
         || lower.matches(".*\\[.*\\d{4}.*\\].*")  // [2015.12.11] 형태 날짜
         || lower.matches(".*@.*");                  // @방송프로그램 형태
+  }
+
+    private static String normalizeQuery(String s) {
+    if (s == null) return "";
+    return s.replaceAll("[\u2018\u2019\u02bc\u00b4`]", "'");
   }
 
   private String cleanArtistForSearch(String artist) {

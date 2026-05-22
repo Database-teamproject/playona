@@ -69,13 +69,14 @@ public class GenieTrackService {
         return trackRepository.save(track);
     }
 
-    private static final Pattern SEARCH_XGNM = Pattern.compile("fnPlaySong\\('(\\d+);");
+    // 단일 ID만 매칭 (다중 ID 앨범 전체듣기 버튼 제외: 103151984;103262171;... 형태 스킵)
+    private static final Pattern SEARCH_XGNM = Pattern.compile("fnPlaySong\\('(\\d+);(?!\\d)");
 
     public PlatformTrack searchTrack(Track track, Platform platform) {
         if (track.getTitle() == null) return null;
 
         String mainArtist = track.getArtist() != null ? track.getArtist().split("[,&]")[0].trim() : "";
-        String rawQuery = track.getTitle() + (mainArtist.isBlank() ? "" : " " + mainArtist);
+        String rawQuery = normalizeQuery(track.getTitle()) + (mainArtist.isBlank() ? "" : " " + normalizeQuery(mainArtist));
         String query = URLEncoder.encode(rawQuery, StandardCharsets.UTF_8).replace("+", "%20");
         String fallbackUrl = "https://www.genie.co.kr/search/searchMain?query=" + query;
 
@@ -107,6 +108,11 @@ public class GenieTrackService {
         }
 
         return new PlatformTrack(track, platform, null, fallbackUrl, track.getTitle(), track.getArtist());
+    }
+
+        private static String normalizeQuery(String s) {
+        if (s == null) return "";
+        return s.replaceAll("[\u2018\u2019\u02bc\u00b4`]", "'");
     }
 
     private String extractSongId(String url) {
