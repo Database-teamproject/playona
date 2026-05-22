@@ -5,20 +5,22 @@ import com.playona.api.domain.platform.entity.PlatformTrack;
 import com.playona.api.domain.track.entity.Track;
 import com.playona.api.domain.track.repository.TrackRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.net.URLEncoder;
 import java.time.Duration;
 import java.time.LocalDate;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class YoutubeTrackService {
@@ -111,106 +113,151 @@ public class YoutubeTrackService {
   }
 
   public PlatformTrack searchTrack(Track track, Platform platform) {
-    // 피처링 제거 후 괄호 제거: "엠씨더맥스 (M.C the MAX), ..." → "엠씨더맥스"
     String mainArtist = cleanArtistForSearch(
         track.getArtist() != null ? track.getArtist().split(",")[0].trim() : ""
     );
-    String query = track.getTitle() + " " + mainArtist;
+    String queryRaw = track.getTitle() + " " + mainArtist;
+    String queryEncoded = URLEncoder.encode(queryRaw, java.nio.charset.StandardCharsets.UTF_8)
+        .replace("+", "%20");
 
-    Map response = webClient.get()
-        .uri(uriBuilder -> uriBuilder
-            .path("/youtube/v3/search")
-            .queryParam("part", "snippet")
-            .queryParam("q", query)
-            .queryParam("type", "video")
-            .queryParam("maxResults", "10")
-            .queryParam("key", apiKey)
-            .build())
-        .retrieve()
-        .bodyToMono(Map.class)
-        .block();
-
-    if (response == null) return null;
-    List rawItems = (List) response.get("items");
-    if (rawItems == null || rawItems.isEmpty()) return null;
-
-    // videoId 수집 → duration 배치 조회
-    List<String> videoIds = new ArrayList<>();
-    for (Object obj : rawItems) {
-      Map item = (Map) obj;
-      Map idMap = (Map) item.get("id");
-      if (idMap != null && idMap.get("videoId") != null) {
-        videoIds.add((String) idMap.get("videoId"));
-      }
-    }
-    Map<String, Long> durations = fetchVideosDuration(videoIds);
-
-    // 우선순위: 1) Topic 채널 → 2) 아티스트 공식 채널 → 3) 비-노이즈 영상 → 4) 아무 영상
-    // duration 있으면 ±15초 이내만 후보로 허용
-    Long targetMs = track.getDurationMs() != null ? track.getDurationMs().longValue() : null;
-    final long DURATION_TOLERANCE_MS = 15_000L;
-
-    Map best = null;
-    Map bestOfficial = null;
-    Map bestClean = null;
-
-    for (Object obj : rawItems) {
-      Map item = (Map) obj;
-      Map idMap = (Map) item.get("id");
-      if (idMap == null) continue;
-      String videoId = (String) idMap.get("videoId");
-      if (videoId == null) continue;
-
-      Map snippet = (Map) item.get("snippet");
-      if (snippet == null) continue;
-      String channelTitle = (String) snippet.get("channelTitle");
-      String videoTitle = (String) snippet.get("title");
-
-      // duration 불일치 시 스킵 (duration 정보가 있을 때만)
-      if (targetMs != null && durations.containsKey(videoId)) {
-        long diff = Math.abs(durations.get(videoId) - targetMs);
-        if (diff > DURATION_TOLERANCE_MS) continue;
-      }
-
-      // 1순위: Topic 채널 (YouTube Music 공식 음원)
-      if (channelTitle != null && channelTitle.endsWith("- Topic")) {
-        best = item;
-        break;
-      }
-
-      // 2순위 후보: 아티스트명 = 채널명 (공식 채널)
-      if (bestOfficial == null && isOfficialChannel(mainArtist, channelTitle)) {
-        bestOfficial = item;
-      }
-
-      // 3순위 후보: 노이즈 아닌 영상 (MV 포함 noise 제외)
-      if (bestClean == null && !isNoiseVideo(videoTitle)) {
-        bestClean = item;
-      }
-
-      // 4순위 후보
-      if (best == null) best = item;
+    // Topic 채널(자동 생성 공식 음원) 우선 검색 → 직접 재생 URL
+    String directUrl = findTopicChannelVideoUrl(queryRaw, track, mainArtist);
+    if (directUrl != null) {
+      return new PlatformTrack(track, platform, null, directUrl, track.getTitle(), track.getArtist());
     }
 
-    // Topic 없으면 공식채널 → 클린 → 첫 번째 순
-    if (best == null || !((Map) best.get("snippet")).getOrDefault("channelTitle", "").toString().endsWith("- Topic")) {
-      if (bestOfficial != null) best = bestOfficial;
-      else if (bestClean != null) best = bestClean;
+    // fallback: 검색 URL
+    String searchUrl = "https://music.youtube.com/search?q=" + queryEncoded;
+    return new PlatformTrack(track, platform, null, searchUrl, track.getTitle(), track.getArtist());
+  }
+
+  /** YouTube Data API로 Topic 채널 영상 검색 → music.youtube.com 직접 재생 URL 반환 */
+  private String findTopicChannelVideoUrl(String query, Track track, String artist) {
+    try {
+      // 1차: "{title} {artist} topic" — Topic 채널 영상 직접 겨냥
+      String topicQuery = query + " topic";
+      Map response = webClient.get()
+          .uri(uriBuilder -> uriBuilder
+              .path("/youtube/v3/search")
+              .queryParam("part", "snippet")
+              .queryParam("q", topicQuery)
+              .queryParam("type", "video")
+              .queryParam("maxResults", "5")
+              .queryParam("key", apiKey)
+              .build())
+          .retrieve()
+          .bodyToMono(Map.class)
+          .block();
+
+      if (response != null) {
+        List topicItems = (List) response.get("items");
+        if (topicItems != null) {
+          for (Object obj : topicItems) {
+            Map item = (Map) obj;
+            Map id = (Map) item.get("id");
+            Map snippet = (Map) item.get("snippet");
+            if (id == null || snippet == null) continue;
+            String videoId = (String) id.get("videoId");
+            String channelTitle = (String) snippet.get("channelTitle");
+            String videoTitle = (String) snippet.get("title");
+            if (videoId == null || channelTitle == null) continue;
+            if (!channelTitle.endsWith("- Topic")) continue;
+            log.info("[YTMusic] Topic 채널 1차 검색 매칭: channel='{}' url=watch?v={}", channelTitle, videoId);
+            return "https://music.youtube.com/watch?v=" + videoId;
+          }
+        }
+      }
+
+      // 2차: 일반 쿼리로 넓게 검색
+      response = webClient.get()
+          .uri(uriBuilder -> uriBuilder
+              .path("/youtube/v3/search")
+              .queryParam("part", "snippet")
+              .queryParam("q", query)
+              .queryParam("type", "video")
+              .queryParam("maxResults", "10")
+              .queryParam("key", apiKey)
+              .build())
+          .retrieve()
+          .bodyToMono(Map.class)
+          .block();
+
+      if (response == null) {
+        log.warn("[YTMusic] API 응답 없음 - query: '{}'", query);
+        return null;
+      }
+      List items = (List) response.get("items");
+      if (items == null || items.isEmpty()) {
+        log.warn("[YTMusic] 검색 결과 없음 - query: '{}'", query);
+        return null;
+      }
+
+      log.info("[YTMusic] 검색 결과 {}건 - query: '{}'", items.size(), query);
+
+      // 1순위: Topic 채널 (아티스트명 - Topic)
+      for (Object obj : items) {
+        Map item = (Map) obj;
+        Map id = (Map) item.get("id");
+        Map snippet = (Map) item.get("snippet");
+        if (id == null || snippet == null) continue;
+
+        String videoId = (String) id.get("videoId");
+        String channelTitle = (String) snippet.get("channelTitle");
+        String videoTitle = (String) snippet.get("title");
+
+        log.info("[YTMusic] 후보: videoId='{}' channel='{}' title='{}'", videoId, channelTitle, videoTitle);
+
+        if (videoId == null || channelTitle == null) continue;
+        if (!channelTitle.endsWith("- Topic")) continue;
+        if (isNoiseVideo(videoTitle)) {
+          log.info("[YTMusic] Topic 채널이지만 노이즈 영상 skip: '{}'", videoTitle);
+          continue;
+        }
+
+        log.info("[YTMusic] Topic 채널 매칭: channel='{}' url=watch?v={}", channelTitle, videoId);
+        return "https://music.youtube.com/watch?v=" + videoId;
+      }
+
+      // 2순위: 공식 채널 + 노이즈 없는 영상
+      String officialFallbackId = null;
+      String officialFallbackChannel = null;
+      for (Object obj : items) {
+        Map item = (Map) obj;
+        Map id = (Map) item.get("id");
+        Map snippet = (Map) item.get("snippet");
+        if (id == null || snippet == null) continue;
+
+        String videoId = (String) id.get("videoId");
+        String channelTitle = (String) snippet.get("channelTitle");
+        String videoTitle = (String) snippet.get("title");
+
+        if (videoId == null || channelTitle == null) continue;
+        if (!isOfficialChannel(artist, channelTitle)) continue;
+
+        // 공식 채널 첫 영상은 노이즈 필터 실패해도 저장 (최후 fallback용)
+        if (officialFallbackId == null) {
+          officialFallbackId = videoId;
+          officialFallbackChannel = channelTitle;
+        }
+
+        if (isNoiseVideo(videoTitle)) continue;
+
+        log.info("[YTMusic] 공식 채널 매칭: channel='{}' url=watch?v={}", channelTitle, videoId);
+        return "https://music.youtube.com/watch?v=" + videoId;
+      }
+
+      // 공식 채널 영상 있으면 노이즈여도 사용 (검색 URL보다 낫다)
+      if (officialFallbackId != null) {
+        log.info("[YTMusic] 공식 채널 노이즈 fallback: channel='{}' url=watch?v={}", officialFallbackChannel, officialFallbackId);
+        return "https://music.youtube.com/watch?v=" + officialFallbackId;
+      }
+
+      log.warn("[YTMusic] Topic/공식 채널 없음 - fallback to search URL");
+      return null;
+    } catch (Exception e) {
+      log.warn("[YTMusic] API 오류: {}", e.getMessage());
+      return null;
     }
-
-    if (best == null) return null;
-    Map idMap = (Map) best.get("id");
-    if (idMap == null) return null;
-    String videoId = (String) idMap.get("videoId");
-    if (videoId == null) return null;
-
-    Map snippet = (Map) best.get("snippet");
-    if (snippet == null) return null;
-    String url = "https://music.youtube.com/watch?v=" + videoId;
-    String title = (String) snippet.get("title");
-    String artist = (String) snippet.get("channelTitle");
-
-    return new PlatformTrack(track, platform, videoId, url, title, artist);
   }
 
   /** 검색 결과 videoId 목록으로 duration(ms) 배치 조회 */
@@ -249,6 +296,25 @@ public class YoutubeTrackService {
     return result;
   }
 
+  /**
+   * 제목이 곡명+아티스트와 거의 일치하는지 판단 (순수 음원 양성 탐지).
+   * 곡명과 아티스트명을 제거하고 남은 텍스트가 짧으면 방송/쇼 영상이 아닌 음원으로 간주.
+   */
+  private boolean isTitleClean(String trackTitle, String artist, String videoTitle) {
+    if (trackTitle == null || videoTitle == null) return false;
+    String norm = videoTitle.toLowerCase().replaceAll("[^a-z0-9가-힣 ]", " ").replaceAll("\\s+", " ").trim();
+    String normTitle = trackTitle.toLowerCase().replaceAll("[^a-z0-9가-힣 ]", " ").replaceAll("\\s+", " ").trim();
+    if (!norm.contains(normTitle)) return false;
+    String remaining = norm.replace(normTitle, "");
+    if (artist != null) {
+      String normArtist = artist.split("[,&]")[0].trim().toLowerCase()
+          .replaceAll("[^a-z0-9가-힣 ]", " ").replaceAll("\\s+", " ").trim();
+      remaining = remaining.replace(normArtist, "");
+    }
+    // 남은 텍스트 15자 이하 = 곡명+아티스트 외 추가 정보 없음
+    return remaining.replaceAll("\\s+", " ").trim().length() <= 15;
+  }
+
   /** 가사/라이브/커버/MV 등 노이즈 영상 여부 판단 */
   private boolean isNoiseVideo(String title) {
     if (title == null) return false;
@@ -262,7 +328,12 @@ public class YoutubeTrackService {
         || lower.contains("레전드") || lower.contains("모음") || lower.contains("직캠")
         || lower.contains("fancam") || lower.contains("소름") || lower.contains("remix")
         || lower.matches(".*\\bmr\\b.*")
-        || lower.matches(".*\\bmv\\b.*");
+        || lower.matches(".*\\bmv\\b.*")
+        || lower.contains("무대") || lower.contains("stage")
+        || lower.contains("스케치북") || lower.contains("뮤직뱅크") || lower.contains("인기가요")
+        || lower.contains("쇼챔피언") || lower.contains("엠카운트다운") || lower.contains("뮤직쇼")
+        || lower.matches(".*\\[.*\\d{4}.*\\].*")  // [2015.12.11] 형태 날짜
+        || lower.matches(".*@.*");                  // @방송프로그램 형태
   }
 
   private String cleanArtistForSearch(String artist) {
