@@ -59,13 +59,37 @@ public class MelonTrackService {
         return trackRepository.save(track);
     }
 
+    private static final Pattern SEARCH_SONG_NO = Pattern.compile("data-song-no=\"(\\d+)\"");
+
     public PlatformTrack searchTrack(Track track, Platform platform) {
         if (track.getTitle() == null) return null;
 
-        String query = URLEncoder.encode(track.getTitle(), StandardCharsets.UTF_8).replace("+", "%20");
-        String searchUrl = "https://www.melon.com/search/total/index.htm?q=" + query;
+        String mainArtist = track.getArtist() != null ? track.getArtist().split("[,&]")[0].trim() : "";
+        String rawQuery = track.getTitle() + (mainArtist.isBlank() ? "" : " " + mainArtist);
+        String query = URLEncoder.encode(rawQuery, StandardCharsets.UTF_8).replace("+", "%20");
+        String fallbackUrl = "https://www.melon.com/search/total/index.htm?q=" + query;
 
-        return new PlatformTrack(track, platform, null, searchUrl, track.getTitle(), track.getArtist());
+        try {
+            String songSearchUrl = "https://www.melon.com/search/song/index.htm?q=" + query;
+            String html = WebClient.create()
+                    .get()
+                    .uri(java.net.URI.create(songSearchUrl))
+                    .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .block();
+
+            if (html != null) {
+                Matcher m = SEARCH_SONG_NO.matcher(html);
+                if (m.find()) {
+                    String songId = m.group(1);
+                    String directUrl = "https://www.melon.com/song/detail.htm?songId=" + songId;
+                    return new PlatformTrack(track, platform, songId, directUrl, track.getTitle(), track.getArtist());
+                }
+            }
+        } catch (Exception ignored) {}
+
+        return new PlatformTrack(track, platform, null, fallbackUrl, track.getTitle(), track.getArtist());
     }
 
     private String extractSongId(String url) {

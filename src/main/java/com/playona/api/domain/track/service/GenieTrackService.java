@@ -5,6 +5,7 @@ import com.playona.api.domain.platform.entity.PlatformTrack;
 import com.playona.api.domain.track.entity.Track;
 import com.playona.api.domain.track.repository.TrackRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,6 +16,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class GenieTrackService {
@@ -67,13 +69,44 @@ public class GenieTrackService {
         return trackRepository.save(track);
     }
 
+    private static final Pattern SEARCH_XGNM = Pattern.compile("fnPlaySong\\('(\\d+);");
+
     public PlatformTrack searchTrack(Track track, Platform platform) {
         if (track.getTitle() == null) return null;
 
-        String query = URLEncoder.encode(track.getTitle(), StandardCharsets.UTF_8).replace("+", "%20");
-        String searchUrl = "https://www.genie.co.kr/search/searchMain?query=" + query;
+        String mainArtist = track.getArtist() != null ? track.getArtist().split("[,&]")[0].trim() : "";
+        String rawQuery = track.getTitle() + (mainArtist.isBlank() ? "" : " " + mainArtist);
+        String query = URLEncoder.encode(rawQuery, StandardCharsets.UTF_8).replace("+", "%20");
+        String fallbackUrl = "https://www.genie.co.kr/search/searchMain?query=" + query;
 
-        return new PlatformTrack(track, platform, null, searchUrl, track.getTitle(), track.getArtist());
+        try {
+            String songSearchUrl = "https://www.genie.co.kr/search/searchMain?query=" + query;
+            String html = WebClient.create()
+                    .get()
+                    .uri(java.net.URI.create(songSearchUrl))
+                    .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                    .header("Referer", "https://www.genie.co.kr/")
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .block();
+
+            if (html != null) {
+                Matcher m = SEARCH_XGNM.matcher(html);
+                if (m.find()) {
+                    String xgnm = m.group(1);
+                    String directUrl = "https://www.genie.co.kr/detail/songInfo?xgnm=" + xgnm;
+                    log.info("[Genie] 직접 링크 매칭: xgnm={}, url={}", xgnm, directUrl);
+                    return new PlatformTrack(track, platform, xgnm, directUrl, track.getTitle(), track.getArtist());
+                }
+                log.warn("[Genie] fnPlaySong 패턴 없음. html 길이={}", html.length());
+            } else {
+                log.warn("[Genie] html 응답 null");
+            }
+        } catch (Exception e) {
+            log.warn("[Genie] 검색 실패: {}", e.getMessage());
+        }
+
+        return new PlatformTrack(track, platform, null, fallbackUrl, track.getTitle(), track.getArtist());
     }
 
     private String extractSongId(String url) {
