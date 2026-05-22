@@ -178,7 +178,7 @@ public class AppleTrackService {
         .replaceAll("[\\(\\)\\[\\]\\{\\}]", " ")
         .replaceAll("\\s+", " ").trim();
     String query = cleanTitle + " " + mainArtist;
-    String encoded = URLEncoder.encode(query, StandardCharsets.UTF_8);
+    String encoded = URLEncoder.encode(query, StandardCharsets.UTF_8).replace("+", "%20");
     log.info("[Apple] title+artist 검색 시작 - query: '{}', title: '{}', mainArtist: '{}'",
         query, track.getTitle(), mainArtist);
 
@@ -251,6 +251,46 @@ public class AppleTrackService {
       log.info("[Apple] 한국어 제목으로 업데이트: '{}' → '{}'", track.getTitle(), appleTitle);
       track.setTitle(appleTitle);
       trackRepository.save(track);
+    }
+  }
+
+  /**
+   * iTunes KR 검색으로 한국어 제목/아티스트 보정 (호출자 트랜잭션 참여).
+   * TrackService.resolveTrack에서 matchAll 전에 호출 — 부모 @Transactional 컨텍스트에서 실행되어
+   * trackRepository.save()가 부모 트랜잭션에 반영됨.
+   */
+  public void enrichKoreanMetadata(Track track) {
+    if (track.getTitle() == null || track.getTitle().matches(".*[가-힣].*")) return;
+    try {
+      String mainArtist = track.getArtist() != null ? track.getArtist().split("[,&]")[0].trim() : "";
+      String query = URLEncoder.encode(track.getTitle() + " " + mainArtist, StandardCharsets.UTF_8)
+          .replace("+", "%20");
+      String searchUrl = "https://itunes.apple.com/search?term=" + query
+          + "&entity=song&limit=1&country=kr";
+
+      Map response = getAppleResponseAsMap(searchUrl, "iTunes KR enrich failed");
+      List results = (List) response.get("results");
+      if (results == null || results.isEmpty()) return;
+
+      Map item = (Map) results.get(0);
+      String krTitle = (String) item.get("trackName");
+      String krArtist = (String) item.get("artistName");
+
+      boolean updated = false;
+      if (krTitle != null && krTitle.matches(".*[가-힣].*")) {
+        log.info("[Apple] KR enrichment 제목: '{}' → '{}'", track.getTitle(), krTitle);
+        track.setTitle(krTitle);
+        updated = true;
+      }
+      if (krArtist != null && krArtist.matches(".*[가-힣].*")
+          && !track.getArtist().matches(".*[가-힣].*")) {
+        log.info("[Apple] KR enrichment 아티스트: '{}' → '{}'", track.getArtist(), krArtist);
+        track.setArtist(krArtist);
+        updated = true;
+      }
+      if (updated) trackRepository.save(track);
+    } catch (Exception e) {
+      log.warn("[Apple] KR enrichment 실패: {}", e.getMessage());
     }
   }
 

@@ -34,6 +34,10 @@ public class TrackService {
             throw new IllegalArgumentException("Unsupported platform URL: " + url);
         }
 
+        // 비한국어 제목 트랙(YouTube/Spotify 영어 제목)을 iTunes KR로 한국어 보정
+        // matchAll 전에 실행해야 Melon/Genie/FLO 검색이 한국어로 진행됨
+        appleTrackService.enrichKoreanMetadata(track);
+
         trackMatchingService.matchAll(track);
 
         return TrackResolveResponse.builder()
