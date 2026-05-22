@@ -70,6 +70,7 @@ public class LinkService {
         String shortCode = generateShortCode();
         SharedLink sharedLink = new SharedLink(shortCode, track, user);
         sharedLinkRepository.save(sharedLink);
+        appleTrackService.enrichKoreanMetadata(track);
         trackMatchingService.matchAll(track);
 
         return new LinkResponse(sharedLink, baseUrl, platformTrackRepository.findByTrack(sharedLink.getTrack()));
