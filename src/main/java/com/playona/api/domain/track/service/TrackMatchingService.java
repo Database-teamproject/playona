@@ -53,10 +53,26 @@ public class TrackMatchingService {
     }
 
     private PlatformTrack matchToPlatform(Track track, Platform platform) {
+        String sourceUrl = track.getSourceUrl();
         return switch (platform.getSlug()) {
-            case "spotify" -> spotifyTrackService.searchTrack(track, platform);
-            case "ytmusic" -> youtubeTrackService.searchTrack(track, platform);
-            case "apple" -> appleTrackService.searchTrack(track, platform);
+            case "spotify" -> {
+                if (sourceUrl != null && sourceUrl.contains("spotify.com")) {
+                    yield new PlatformTrack(track, platform, null, sourceUrl, track.getTitle(), track.getArtist());
+                }
+                yield spotifyTrackService.searchTrack(track, platform);
+            }
+            case "ytmusic" -> {
+                if (sourceUrl != null && (sourceUrl.contains("youtube.com") || sourceUrl.contains("youtu.be"))) {
+                    yield new PlatformTrack(track, platform, null, sourceUrl, track.getTitle(), track.getArtist());
+                }
+                yield youtubeTrackService.searchTrack(track, platform);
+            }
+            case "apple" -> {
+                if (sourceUrl != null && sourceUrl.contains("music.apple.com")) {
+                    yield new PlatformTrack(track, platform, null, sourceUrl, track.getTitle(), track.getArtist());
+                }
+                yield appleTrackService.searchTrack(track, platform);
+            }
             case "melon"  -> melonTrackService.searchTrack(track, platform);
             case "flo"    -> floTrackService.searchTrack(track, platform);
             case "genie"  -> genieTrackService.searchTrack(track, platform);
