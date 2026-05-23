@@ -2,6 +2,7 @@ package com.playona.api.domain.link.dto;
 
 import com.playona.api.domain.link.entity.SharedLink;
 import com.playona.api.domain.platform.entity.PlatformTrack;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import lombok.Getter;
@@ -15,6 +16,7 @@ public class LinkResponse {
   private final String thumbnailUrl;
   private final int clickCount;
   private final String shareUrl;
+  private final LocalDateTime createdAt;
   private final List<Map<String, String>> platforms;
 
   public LinkResponse(SharedLink sharedLink, String baseUrl, List<PlatformTrack> platformTracks) {
@@ -26,6 +28,7 @@ public class LinkResponse {
     this.clickCount = sharedLink.getClickCount() != null
             ? sharedLink.getClickCount() : 0;
     this.shareUrl = baseUrl + "/t/" + sharedLink.getShortCode();
+    this.createdAt = sharedLink.getCreatedAt();
     String trackThumbnail = sharedLink.getTrack().getThumbnailUrl() != null
             ? sharedLink.getTrack().getThumbnailUrl() : "";
     this.platforms = platformTracks.stream()
