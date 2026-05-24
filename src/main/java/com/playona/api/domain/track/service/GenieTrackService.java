@@ -56,7 +56,7 @@ public class GenieTrackService {
         if (!titleMatcher.find()) throw new RuntimeException("Genie 곡 정보를 찾을 수 없습니다: " + sourceUrl);
 
         // "제목 / 아티스트 - genie" 형식 (songInfo, albumInfo 공통)
-        String ogTitle = titleMatcher.group(1);
+        String ogTitle = unescapeHtml(titleMatcher.group(1));
         String stripped = ogTitle.replaceAll("\\s*-\\s*genie\\s*$", "").trim();
         int sep = stripped.lastIndexOf(" / ");
         String title  = sep > 0 ? stripped.substring(0, sep).trim() : stripped;
@@ -115,6 +115,16 @@ public class GenieTrackService {
         return s.replaceAll("(?i)\\s*[\\(\\[]\\s*(feat|ft|prod|with)\\.?[^)\\]]*[\\)\\]]", "")
                 .replaceAll("[\u2018\u2019\u02bc\u00b4`]", "'")
                 .replaceAll("\\s+", " ").trim();
+    }
+
+    private static String unescapeHtml(String s) {
+        if (s == null) return null;
+        return s.replace("&amp;", "&")
+                .replace("&lt;", "<")
+                .replace("&gt;", ">")
+                .replace("&quot;", "\"")
+                .replace("&#39;", "'")
+                .replace("&apos;", "'");
     }
 
     private String extractSongId(String url) {

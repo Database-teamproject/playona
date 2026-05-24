@@ -46,7 +46,7 @@ public class MelonTrackService {
         Matcher titleMatcher = OG_TITLE.matcher(html);
         if (!titleMatcher.find()) throw new RuntimeException("Melon 곡 정보를 찾을 수 없습니다: " + songId);
 
-        String ogTitle = titleMatcher.group(1);
+        String ogTitle = unescapeHtml(titleMatcher.group(1));
         // "제목 - 아티스트" 형식에서 마지막 " - " 기준으로 분리
         int sep = ogTitle.lastIndexOf(" - ");
         String title = sep > 0 ? ogTitle.substring(0, sep).trim() : ogTitle.trim();
@@ -97,6 +97,16 @@ public class MelonTrackService {
         return s.replaceAll("(?i)\\s*[\\(\\[]\\s*(feat|ft|prod|with)\\.?[^)\\]]*[\\)\\]]", "")
                 .replaceAll("[\u2018\u2019\u02bc\u00b4`]", "'")
                 .replaceAll("\\s+", " ").trim();
+    }
+
+    private static String unescapeHtml(String s) {
+        if (s == null) return null;
+        return s.replace("&amp;", "&")
+                .replace("&lt;", "<")
+                .replace("&gt;", ">")
+                .replace("&quot;", "\"")
+                .replace("&#39;", "'")
+                .replace("&apos;", "'");
     }
 
     private String extractSongId(String url) {
