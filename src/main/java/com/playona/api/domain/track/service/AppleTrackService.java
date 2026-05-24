@@ -164,6 +164,12 @@ public class AppleTrackService {
 
     if (trackId == null || url == null) return null;
 
+    // ISRC 결과 제목이 저장된 제목과 전혀 다르면 오매칭으로 간주 → title+artist 검색으로 폴백
+    if (!isSimilar(track.getTitle(), title) && !isDifferentScript(track.getTitle(), title)) {
+      log.warn("[Apple] ISRC 결과 제목 불일치 skip: '{}' vs '{}' (ISRC={})", track.getTitle(), title, isrc);
+      return null;
+    }
+
     return new PlatformTrack(track, platform, trackId, cleanAppleUrl(url), title, artist);
   }
 
@@ -264,7 +270,8 @@ public class AppleTrackService {
     if (track.getTitle() == null || track.getTitle().matches(".*[가-힣].*")) return;
     try {
       String mainArtist = track.getArtist() != null ? track.getArtist().split("[,&]")[0].trim() : "";
-      String query = URLEncoder.encode(track.getTitle() + " " + mainArtist, StandardCharsets.UTF_8)
+      String rawQuery = normalizeQuery(track.getTitle()) + (mainArtist.isBlank() ? "" : " " + normalizeQuery(mainArtist));
+      String query = URLEncoder.encode(rawQuery, StandardCharsets.UTF_8)
           .replace("+", "%20");
       String searchUrl = "https://itunes.apple.com/search?term=" + query
           + "&entity=song&limit=3&country=kr";
@@ -295,6 +302,13 @@ public class AppleTrackService {
     } catch (Exception e) {
       log.warn("[Apple] KR enrichment 실패: {}", e.getMessage(), e);
     }
+  }
+
+  private static String normalizeQuery(String s) {
+    if (s == null) return "";
+    return s.replaceAll("(?i)\\s*[\\(\\[]\\s*(feat|ft|prod|with)\\.?[^)\\]]*[\\)\\]]", "")
+            .replaceAll("[‘’ʼ´`]", "'")
+            .replaceAll("\\s+", " ").trim();
   }
 
   /** 아이유↔IU처럼 한쪽은 라틴, 다른쪽은 한글/CJK인 경우 true (동일 아티스트 가능성) */

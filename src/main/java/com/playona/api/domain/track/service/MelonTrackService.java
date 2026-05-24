@@ -92,9 +92,11 @@ public class MelonTrackService {
         return new PlatformTrack(track, platform, null, fallbackUrl, track.getTitle(), track.getArtist());
     }
 
-        private static String normalizeQuery(String s) {
+    private static String normalizeQuery(String s) {
         if (s == null) return "";
-        return s.replaceAll("[\u2018\u2019\u02bc\u00b4`]", "'");
+        return s.replaceAll("(?i)\\s*[\\(\\[]\\s*(feat|ft|prod|with)\\.?[^)\\]]*[\\)\\]]", "")
+                .replaceAll("[\u2018\u2019\u02bc\u00b4`]", "'")
+                .replaceAll("\\s+", " ").trim();
     }
 
     private String extractSongId(String url) {
