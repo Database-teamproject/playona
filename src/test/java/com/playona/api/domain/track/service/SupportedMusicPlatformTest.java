@@ -46,4 +46,16 @@ class SupportedMusicPlatformTest {
     assertEquals("123", GenieTrackService.extractSongId(
         "https://www.genie.co.kr/detail/songInfo?xgnm=123"));
   }
+
+  @Test
+  void extractsTheFirstDirectSongResultFromKoreanPlatformSearchPages() {
+    assertEquals("30314784", MelonTrackService.extractFirstSearchSongId(
+        "<button data-song-no=\"30314784\">좋아요</button>"));
+    assertEquals("30314784", MelonTrackService.extractFirstSearchSongId(
+        "<button data-song-no='30314784'>좋아요</button>"));
+    assertEquals("87034188", GenieTrackService.extractFirstSearchSongId(
+        "<a onclick=\"fnPlaySong('87034188','1'); return false;\">밤편지</a>"));
+    assertEquals("87034188", GenieTrackService.extractFirstSearchSongId(
+        "<a onclick=\"fnPlaySong('87034188;','1');return false;\">듣기</a>"));
+  }
 }

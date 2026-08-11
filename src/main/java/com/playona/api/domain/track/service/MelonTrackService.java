@@ -5,6 +5,7 @@ import com.playona.api.domain.platform.entity.PlatformTrack;
 import com.playona.api.domain.track.entity.Track;
 import com.playona.api.domain.track.repository.TrackRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,6 +17,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class MelonTrackService {
 
@@ -67,6 +69,24 @@ public class MelonTrackService {
         String query = URLEncoder.encode(rawQuery, StandardCharsets.UTF_8).replace("+", "%20");
         String fallbackUrl = "https://www.melon.com/search/total/index.htm?q=" + query;
 
+        try {
+            String html = WebClient.create()
+                    .get()
+                    .uri(java.net.URI.create("https://www.melon.com/search/song/index.htm?q=" + query))
+                    .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .block();
+            String songId = extractFirstSearchSongId(html);
+            if (songId != null) {
+                return new PlatformTrack(track, platform, songId,
+                        "https://www.melon.com/song/detail.htm?songId=" + songId,
+                        track.getTitle(), track.getArtist());
+            }
+        } catch (Exception e) {
+            log.warn("[Melon] 검색 결과 직접 링크 추출 실패: {}", e.getMessage());
+        }
+
         return new PlatformTrack(track, platform, null, fallbackUrl, track.getTitle(), track.getArtist());
     }
 
@@ -95,5 +115,11 @@ public class MelonTrackService {
         Matcher m = p.matcher(url);
         if (m.find()) return m.group(1);
         throw new IllegalArgumentException("Could not extract Melon songId from URL: " + url);
+    }
+
+    static String extractFirstSearchSongId(String html) {
+        if (html == null) return null;
+        Matcher matcher = Pattern.compile("data-song-no=[\"'](\\d+)[\"']").matcher(html);
+        return matcher.find() ? matcher.group(1) : null;
     }
 }
