@@ -139,6 +139,34 @@ public class AppleTrackService {
     }
   }
 
+  /** Spotify 등 글로벌 카탈로그 검색에 사용할 영문 곡명을 iTunes US에서 찾는다. */
+  public String findGlobalTitle(Track track) {
+    if (track.getTitle() == null || track.getArtist() == null) return null;
+
+    try {
+      String mainArtist = track.getArtist().split("[,&]")[0].trim();
+      String query = URLEncoder.encode(track.getTitle() + " " + mainArtist, StandardCharsets.UTF_8)
+          .replace("+", "%20");
+      Map response = getAppleResponseAsMap(
+          "https://itunes.apple.com/search?term=" + query + "&entity=song&limit=5&country=us",
+          "Failed to parse Apple US search response");
+      List results = (List) response.get("results");
+      if (results == null) return null;
+
+      for (Object obj : results) {
+        Map item = (Map) obj;
+        String title = (String) item.get("trackName");
+        String artist = (String) item.get("artistName");
+        if (title != null && isSimilar(mainArtist, artist)) {
+          return title;
+        }
+      }
+    } catch (Exception e) {
+      log.warn("[Apple] 글로벌 곡명 조회 실패: {}", e.getMessage());
+    }
+    return null;
+  }
+
   private PlatformTrack searchAppleByIsrc(Track track, Platform platform, String isrc) {
     String lookupUrl = "https://itunes.apple.com/lookup?isrc=" +
             URLEncoder.encode(isrc, StandardCharsets.UTF_8);

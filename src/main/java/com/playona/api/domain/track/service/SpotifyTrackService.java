@@ -63,6 +63,7 @@ public class SpotifyTrackService {
     }
 
     private final TrackRepository trackRepository;
+    private final AppleTrackService appleTrackService;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Track getTrackFromUrl(String url) {
@@ -148,12 +149,21 @@ public class SpotifyTrackService {
                 query = "track:" + track.getTitle() + " artist:" + cleanArtist;
             }
 
-            var item = findVerifiedMatch(track, query);
+            var item = findVerifiedMatch(track, query, track.getTitle());
             if (item == null && track.getIsrc() == null) {
                 String simplifiedTitle = cleanTitleForSearch(track.getTitle());
                 if (!simplifiedTitle.equals(track.getTitle())) {
                     item = findVerifiedMatch(track,
-                            "track:" + simplifiedTitle + " artist:" + cleanArtistForSearch(track.getArtist()));
+                            "track:" + simplifiedTitle + " artist:" + cleanArtistForSearch(track.getArtist()),
+                            simplifiedTitle);
+                }
+            }
+            if (item == null && track.getIsrc() == null) {
+                String globalTitle = appleTrackService.findGlobalTitle(track);
+                if (globalTitle != null && !globalTitle.equalsIgnoreCase(track.getTitle())) {
+                    item = findVerifiedMatch(track,
+                            "track:" + globalTitle + " artist:" + cleanArtistForSearch(track.getArtist()),
+                            globalTitle);
                 }
             }
             if (item == null) return null;
@@ -186,15 +196,16 @@ public class SpotifyTrackService {
     }
 
     private se.michaelthelin.spotify.model_objects.specification.Track findVerifiedMatch(
-            Track track, String query) throws Exception {
+            Track track, String query, String matchTitle) throws Exception {
         var results = authorizedApi().searchTracks(query).limit(5).build().execute();
         return Arrays.stream(results.getItems())
-                .filter(candidate -> isVerifiedMatch(track, candidate))
+                .filter(candidate -> isVerifiedMatch(track, candidate, matchTitle))
                 .findFirst()
                 .orElse(null);
     }
 
-    private boolean isVerifiedMatch(Track track, se.michaelthelin.spotify.model_objects.specification.Track candidate) {
+    private boolean isVerifiedMatch(Track track, se.michaelthelin.spotify.model_objects.specification.Track candidate,
+            String matchTitle) {
         if (track.getIsrc() != null && candidate.getExternalIds() != null) {
             String candidateIsrc = candidate.getExternalIds().getExternalIds().get("isrc");
             return track.getIsrc().equals(candidateIsrc);
@@ -203,7 +214,7 @@ public class SpotifyTrackService {
                 .map(ArtistSimplified::getName)
                 .collect(Collectors.joining(", "));
         return TrackMatchVerifier.isConfidentMatch(
-                track.getTitle(), track.getArtist(), track.getDurationMs(),
+                matchTitle, track.getArtist(), track.getDurationMs(),
                 candidate.getName(), candidateArtist, candidate.getDurationMs());
     }
 
