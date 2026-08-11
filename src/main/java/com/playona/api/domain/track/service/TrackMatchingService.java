@@ -44,8 +44,13 @@ public class TrackMatchingService {
         List<Platform> platforms = platformRepository.findByIsActiveTrue();
 
         for (Platform platform : platforms) {
-            if (platformTrackRepository.findByTrackAndPlatform(track, platform).isPresent()) {
+            var existing = platformTrackRepository.findByTrackAndPlatform(track, platform);
+            if (existing.isPresent() && !isSearchFallback(platform, existing.get())) {
                 continue;
+            }
+            existing.ifPresent(platformTrackRepository::delete);
+            if (existing.isPresent()) {
+                platformTrackRepository.flush();
             }
 
             try {
@@ -60,6 +65,12 @@ public class TrackMatchingService {
         }
 
         return platformTrackRepository.findByTrack(track);
+    }
+
+    private boolean isSearchFallback(Platform platform, PlatformTrack platformTrack) {
+        return "flo".equals(platform.getSlug())
+            && platformTrack.getUrl() != null
+            && platformTrack.getUrl().contains("music-flo.com/search");
     }
 
     private PlatformTrack matchToPlatform(Track track, Platform platform) {
