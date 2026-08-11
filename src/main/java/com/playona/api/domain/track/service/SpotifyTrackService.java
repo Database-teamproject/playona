@@ -127,9 +127,12 @@ public class SpotifyTrackService {
         }
     }
 
-    private String extractTrackId(String url) {
-        if (url.contains("spotify.com/track/")) {
-            return url.split("spotify.com/track/")[1].split("\\?")[0];
+    static String extractTrackId(String url) {
+        var matcher = java.util.regex.Pattern
+                .compile("^https?://open\\.spotify\\.com/(?:intl-[A-Za-z-]+/)?track/([A-Za-z0-9]{22})(?:[/?#].*)?$")
+                .matcher(url == null ? "" : url);
+        if (matcher.matches()) {
+            return matcher.group(1);
         }
         throw new IllegalArgumentException("Not a valid Spotify URL: " + url);
     }

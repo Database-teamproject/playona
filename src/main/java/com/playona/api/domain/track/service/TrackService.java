@@ -19,20 +19,22 @@ public class TrackService {
     private final YoutubeTrackService youtubeTrackService;
     private final SpotifyTrackService spotifyTrackService;
     private final AppleTrackService appleTrackService;
+    private final MelonTrackService melonTrackService;
+    private final FloTrackService floTrackService;
+    private final GenieTrackService genieTrackService;
 
     @Transactional
     public TrackResolveResponse resolveTrack(String url) {
         Track track;
 
-        if (isYoutubeUrl(url)) {
-            track = youtubeTrackService.getTrackFromUrl(url);
-        } else if (isSpotifyUrl(url)) {
-            track = spotifyTrackService.getTrackFromUrl(url);
-        } else if (isAppleMusicUrl(url)) {
-            track = appleTrackService.getTrackFromUrl(url);
-        } else {
-            throw new IllegalArgumentException("Unsupported platform URL: " + url);
-        }
+        track = switch (SupportedMusicPlatform.fromUrl(url)) {
+            case YOUTUBE -> youtubeTrackService.getTrackFromUrl(url);
+            case SPOTIFY -> spotifyTrackService.getTrackFromUrl(url);
+            case APPLE_MUSIC -> appleTrackService.getTrackFromUrl(url);
+            case MELON -> melonTrackService.getTrackFromUrl(url);
+            case FLO -> floTrackService.getTrackFromUrl(url);
+            case GENIE -> genieTrackService.getTrackFromUrl(url);
+        };
 
         // 비한국어 제목 트랙(YouTube/Spotify 영어 제목)을 iTunes KR로 한국어 보정
         // matchAll 전에 실행해야 Melon/Genie/FLO 검색이 한국어로 진행됨
@@ -70,19 +72,4 @@ public class TrackService {
                 .build();
     }
 
-    private boolean isYoutubeUrl(String url) {
-        return url != null && (
-                url.contains("youtube.com/watch?v=") ||
-                        url.contains("music.youtube.com/watch?v=") ||
-                        url.contains("youtu.be/")
-        );
-    }
-
-    private boolean isSpotifyUrl(String url) {
-        return url != null && url.contains("open.spotify.com/track/");
-    }
-
-    private boolean isAppleMusicUrl(String url) {
-        return url != null && url.contains("music.apple.com/");
-    }
 }

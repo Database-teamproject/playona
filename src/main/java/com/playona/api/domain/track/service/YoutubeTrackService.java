@@ -382,18 +382,25 @@ public class YoutubeTrackService {
     return title;
   }
 
-  private String extractVideoId(String url) {
+  static String extractVideoId(String url) {
     if (url == null || url.isBlank()) {
       throw new IllegalArgumentException("YouTube URL is empty");
     }
 
-    if (url.contains("youtu.be/")) {
-      return url.split("youtu.be/")[1].split("\\?")[0];
-    }
+    var shortUrl = java.util.regex.Pattern
+        .compile("^https?://youtu\\.be/([^?/#]+)")
+        .matcher(url);
+    if (shortUrl.find()) return shortUrl.group(1);
 
-    if (url.contains("youtube.com/watch?v=") || url.contains("music.youtube.com/watch?v=")) {
-      return url.split("v=")[1].split("&")[0];
-    }
+    var pathUrl = java.util.regex.Pattern
+        .compile("^https?://(?:[\\w-]+\\.)?youtube\\.com/(?:shorts|live|embed)/([^?/#]+)")
+        .matcher(url);
+    if (pathUrl.find()) return pathUrl.group(1);
+
+    var watchUrl = java.util.regex.Pattern
+        .compile("^https?://(?:[\\w-]+\\.)?youtube\\.com/watch\\?(?:[^#]*&)?v=([^&#]+)")
+        .matcher(url);
+    if (watchUrl.find()) return watchUrl.group(1);
 
     throw new IllegalArgumentException("유튜브 개별 영상 URL을 입력해주세요. (재생목록, 채널 URL은 지원하지 않습니다)");
   }

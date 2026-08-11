@@ -97,19 +97,14 @@ public class AppleTrackService {
     return trackRepository.save(newTrack);
   }
 
-  private String extractTrackId(String url) {
+  static String extractTrackId(String url) {
     if (url == null || !url.contains("music.apple.com/")) {
       throw new IllegalArgumentException("Not a valid Apple Music URL: " + url);
     }
 
     // album URL with selected song: ?i=1337452977
-    int index = url.indexOf("?i=");
-    if (index != -1) {
-      String songId = url.substring(index + 3).split("&")[0];
-      if (songId.matches("\\d+")) {
-        return songId;
-      }
-    }
+    var selectedSong = java.util.regex.Pattern.compile("[?&]i=(\\d+)").matcher(url);
+    if (selectedSong.find()) return selectedSong.group(1);
 
     // direct /song/.../<id> or fallback numeric segment
     String[] parts = url.split("/");

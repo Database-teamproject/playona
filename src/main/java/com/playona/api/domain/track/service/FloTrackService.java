@@ -149,7 +149,7 @@ public class FloTrackService {
                 track.getTitle(), track.getArtist(), track.getDurationMs(), title, artist, null);
     }
 
-    private String extractTrackId(String url) {
+    static String extractTrackId(String url) {
         Matcher m = TRACK_ID.matcher(url);
         if (m.find()) return m.group(1);
         throw new IllegalArgumentException("Could not extract FLO trackId from URL: " + url);

@@ -95,7 +95,7 @@ public class GenieTrackService {
                 .replace("&apos;", "'");
     }
 
-    private String extractSongId(String url) {
+    static String extractSongId(String url) {
         Matcher m = SONG_ID.matcher(url);
         if (m.find()) return m.group(1);
         throw new IllegalArgumentException("Could not extract Genie songId from URL: " + url);

@@ -87,7 +87,7 @@ public class MelonTrackService {
                 .replace("&apos;", "'");
     }
 
-    private String extractSongId(String url) {
+    static String extractSongId(String url) {
         if (url == null || !url.contains("melon.com")) {
             throw new IllegalArgumentException("Not a valid Melon URL: " + url);
         }

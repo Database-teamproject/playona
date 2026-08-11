@@ -14,6 +14,7 @@ import com.playona.api.domain.track.service.MelonTrackService;
 import com.playona.api.domain.track.service.SpotifyTrackService;
 import com.playona.api.domain.track.service.TrackMatchingService;
 import com.playona.api.domain.track.service.YoutubeTrackService;
+import com.playona.api.domain.track.service.SupportedMusicPlatform;
 import com.playona.api.domain.user.entity.User;
 import com.playona.api.domain.user.entity.UserPlatformPreference;
 import com.playona.api.domain.user.repository.UserPlatformPreferenceRepository;
@@ -77,20 +78,14 @@ public class LinkService {
     }
 
     private Track findOrCreateTrack(String url) {
-        if (url.contains("spotify.com")) {
-            return spotifyTrackService.getTrackFromUrl(url);
-        } else if (url.contains("youtube.com") || url.contains("youtu.be")) {
-            return youtubeTrackService.getTrackFromUrl(url);
-        } else if (url.contains("music.apple.com")) {
-            return appleTrackService.getTrackFromUrl(url);
-        } else if (url.contains("melon.com")) {
-            return melonTrackService.getTrackFromUrl(url);
-        } else if (url.contains("music-flo.com")) {
-            return floTrackService.getTrackFromUrl(url);
-        } else if (url.contains("genie.co.kr")) {
-            return genieTrackService.getTrackFromUrl(url);
-        }
-        throw new IllegalArgumentException("지원하지 않는 플랫폼 URL입니다. (지원: Spotify, YouTube, Apple Music, Melon, FLO, Genie)");
+        return switch (SupportedMusicPlatform.fromUrl(url)) {
+            case SPOTIFY -> spotifyTrackService.getTrackFromUrl(url);
+            case YOUTUBE -> youtubeTrackService.getTrackFromUrl(url);
+            case APPLE_MUSIC -> appleTrackService.getTrackFromUrl(url);
+            case MELON -> melonTrackService.getTrackFromUrl(url);
+            case FLO -> floTrackService.getTrackFromUrl(url);
+            case GENIE -> genieTrackService.getTrackFromUrl(url);
+        };
     }
 
     private String generateShortCode() {
