@@ -145,8 +145,8 @@ public class FloTrackService {
         String title = (String) candidate.get("name");
         List<Map<String, Object>> artists = (List<Map<String, Object>>) candidate.get("artistList");
         String artist = artists != null && !artists.isEmpty() ? (String) artists.get(0).get("name") : null;
-        return TrackMatchVerifier.isConfidentMatch(
-                track.getTitle(), track.getArtist(), track.getDurationMs(), title, artist, null);
+        return TrackMatchVerifier.hasMatchingTitleAndArtist(
+                track.getTitle(), track.getArtist(), title, artist);
     }
 
     static String extractTrackId(String url) {

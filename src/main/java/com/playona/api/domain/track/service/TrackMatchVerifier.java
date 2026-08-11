@@ -6,9 +6,14 @@ final class TrackMatchVerifier {
 
   static boolean isConfidentMatch(String title, String artist, Integer durationMs,
       String candidateTitle, String candidateArtist, Integer candidateDurationMs) {
-    return isSimilar(title, candidateTitle)
-        && isSimilar(firstArtist(artist), firstArtist(candidateArtist))
+    return hasMatchingTitleAndArtist(title, artist, candidateTitle, candidateArtist)
         && hasCompatibleDuration(durationMs, candidateDurationMs);
+  }
+
+  static boolean hasMatchingTitleAndArtist(String title, String artist,
+      String candidateTitle, String candidateArtist) {
+    return isSimilar(title, candidateTitle)
+        && isSimilar(firstArtist(artist), firstArtist(candidateArtist));
   }
 
   private static boolean isSimilar(String left, String right) {

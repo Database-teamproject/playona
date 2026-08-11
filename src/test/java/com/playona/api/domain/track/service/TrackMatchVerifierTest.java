@@ -31,4 +31,11 @@ class TrackMatchVerifierTest {
         "끝말잇기 (feat. 스키니 브라운)", "TOIL", 224_000,
         "끝말잇기 (Feat. Skinny Brown)", "TOIL & Gist", 224_000));
   }
+
+  @Test
+  void acceptsExactFLOTitleAndArtistDespiteSourceVideoDuration() {
+    assertTrue(TrackMatchVerifier.hasMatchingTitleAndArtist(
+        "끝말잇기 (feat. 스키니 브라운)", "TOIL",
+        "끝말잇기 (Feat. Skinny Brown)", "TOIL"));
+  }
 }
