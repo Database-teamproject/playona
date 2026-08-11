@@ -32,7 +32,9 @@ final class TrackMatchVerifier {
 
   private static String normalize(String value) {
     if (value == null) return "";
-    return value.toLowerCase()
+    return value
+        .replaceAll("(?i)\\s*[\\(\\[]\\s*(feat|ft|featuring)\\.?[^)\\]]*[\\)\\]]", "")
+        .toLowerCase()
         .replaceAll("[^a-z0-9가-힣\\u3040-\\u30ff\\u4e00-\\u9fff]", "");
   }
 }

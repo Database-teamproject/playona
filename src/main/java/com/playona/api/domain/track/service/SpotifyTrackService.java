@@ -148,13 +148,14 @@ public class SpotifyTrackService {
                 query = "track:" + track.getTitle() + " artist:" + cleanArtist;
             }
 
-            var results = authorizedApi().searchTracks(query).limit(5).build().execute();
-            if (results.getItems().length == 0) return null;
-
-            var item = Arrays.stream(results.getItems())
-                    .filter(candidate -> isVerifiedMatch(track, candidate))
-                    .findFirst()
-                    .orElse(null);
+            var item = findVerifiedMatch(track, query);
+            if (item == null && track.getIsrc() == null) {
+                String simplifiedTitle = cleanTitleForSearch(track.getTitle());
+                if (!simplifiedTitle.equals(track.getTitle())) {
+                    item = findVerifiedMatch(track,
+                            "track:" + simplifiedTitle + " artist:" + cleanArtistForSearch(track.getArtist()));
+                }
+            }
             if (item == null) return null;
             String foundTrackId = item.getId();
             String foundUrl = "https://open.spotify.com/track/" + foundTrackId;
@@ -182,6 +183,15 @@ public class SpotifyTrackService {
         } catch (Exception e) {
             throw new RuntimeException("Spotify search failed: " + e.getMessage(), e);
         }
+    }
+
+    private se.michaelthelin.spotify.model_objects.specification.Track findVerifiedMatch(
+            Track track, String query) throws Exception {
+        var results = authorizedApi().searchTracks(query).limit(5).build().execute();
+        return Arrays.stream(results.getItems())
+                .filter(candidate -> isVerifiedMatch(track, candidate))
+                .findFirst()
+                .orElse(null);
     }
 
     private boolean isVerifiedMatch(Track track, se.michaelthelin.spotify.model_objects.specification.Track candidate) {
@@ -221,5 +231,11 @@ public class SpotifyTrackService {
     private String cleanArtistForSearch(String artist) {
         if (artist == null || artist.isBlank()) return "";
         return artist.replaceAll("\\s*[\\(\\[].*?[\\)\\]]\\s*", " ").replaceAll("\\s+", " ").trim();
+    }
+
+    private String cleanTitleForSearch(String title) {
+        if (title == null) return "";
+        return title.replaceAll("(?i)\\s*[\\(\\[]\\s*(feat|ft|featuring)\\.?[^)\\]]*[\\)\\]]", "")
+                .replaceAll("\\s+", " ").trim();
     }
 }

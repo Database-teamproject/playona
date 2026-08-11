@@ -24,4 +24,11 @@ class TrackMatchVerifierTest {
     assertFalse(TrackMatchVerifier.isConfidentMatch(
         "밤편지", "아이유", 210_000, "밤편지", "아이유", 240_000));
   }
+
+  @Test
+  void acceptsMatchingTitlesWhenFeaturingNamesUseDifferentScripts() {
+    assertTrue(TrackMatchVerifier.isConfidentMatch(
+        "끝말잇기 (feat. 스키니 브라운)", "TOIL", 224_000,
+        "끝말잇기 (Feat. Skinny Brown)", "TOIL & Gist", 224_000));
+  }
 }

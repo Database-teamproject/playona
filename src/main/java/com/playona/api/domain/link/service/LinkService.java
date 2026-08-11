@@ -65,6 +65,7 @@ public class LinkService {
             : sharedLinkRepository.findFirstByTrackAndUserIsNull(track);
 
         if (existing.isPresent()) {
+            trackMatchingService.matchAll(track);
             return new LinkResponse(existing.get(), baseUrl, platformTrackRepository.findByTrack(existing.get().getTrack()));
         }
 
