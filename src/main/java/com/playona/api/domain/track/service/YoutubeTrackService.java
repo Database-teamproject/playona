@@ -68,7 +68,7 @@ public class YoutubeTrackService {
     String categoryId = snippet != null ? String.valueOf(snippet.get("categoryId")) : null;
     String liveBroadcastContent = snippet != null ? (String) snippet.get("liveBroadcastContent") : null;
     if (!isAcceptedSourceVideo(categoryId, liveBroadcastContent)) {
-      throw new IllegalArgumentException("음악 카테고리의 일반 영상 URL만 지원합니다.");
+      throw new IllegalArgumentException("음악 또는 공식 뮤직비디오 URL만 지원합니다.");
     }
 
     Map localized = snippet != null ? (Map) snippet.get("localized") : null;
@@ -271,7 +271,8 @@ public class YoutubeTrackService {
   }
 
   static boolean isAcceptedSourceVideo(String categoryId, String liveBroadcastContent) {
-    return "10".equals(categoryId) && (liveBroadcastContent == null || "none".equals(liveBroadcastContent));
+    return ("10".equals(categoryId) || "24".equals(categoryId))
+        && (liveBroadcastContent == null || "none".equals(liveBroadcastContent));
   }
 
   static boolean hasCompatibleDuration(Integer trackDurationMs, Long candidateDurationMs) {

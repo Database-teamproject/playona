@@ -10,8 +10,9 @@ class YoutubeTrackServiceTest {
   @Test
   void acceptsOnlyNonLiveMusicCategorySourceVideos() {
     assertTrue(YoutubeTrackService.isAcceptedSourceVideo("10", "none"));
-    assertFalse(YoutubeTrackService.isAcceptedSourceVideo("24", "none"));
+    assertTrue(YoutubeTrackService.isAcceptedSourceVideo("24", "none"));
     assertFalse(YoutubeTrackService.isAcceptedSourceVideo("10", "live"));
+    assertFalse(YoutubeTrackService.isAcceptedSourceVideo("22", "none"));
   }
 
   @Test
