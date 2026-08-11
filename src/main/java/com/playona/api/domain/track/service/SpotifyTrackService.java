@@ -145,10 +145,14 @@ public class SpotifyTrackService {
                 query = "track:" + track.getTitle() + " artist:" + cleanArtist;
             }
 
-            var results = authorizedApi().searchTracks(query).build().execute();
+            var results = authorizedApi().searchTracks(query).limit(5).build().execute();
             if (results.getItems().length == 0) return null;
 
-            var item = results.getItems()[0];
+            var item = Arrays.stream(results.getItems())
+                    .filter(candidate -> isVerifiedMatch(track, candidate))
+                    .findFirst()
+                    .orElse(null);
+            if (item == null) return null;
             String foundTrackId = item.getId();
             String foundUrl = "https://open.spotify.com/track/" + foundTrackId;
 
@@ -175,6 +179,19 @@ public class SpotifyTrackService {
         } catch (Exception e) {
             throw new RuntimeException("Spotify search failed: " + e.getMessage(), e);
         }
+    }
+
+    private boolean isVerifiedMatch(Track track, se.michaelthelin.spotify.model_objects.specification.Track candidate) {
+        if (track.getIsrc() != null && candidate.getExternalIds() != null) {
+            String candidateIsrc = candidate.getExternalIds().getExternalIds().get("isrc");
+            return track.getIsrc().equals(candidateIsrc);
+        }
+        String candidateArtist = Arrays.stream(candidate.getArtists())
+                .map(ArtistSimplified::getName)
+                .collect(Collectors.joining(", "));
+        return TrackMatchVerifier.isConfidentMatch(
+                track.getTitle(), track.getArtist(), track.getDurationMs(),
+                candidate.getName(), candidateArtist, candidate.getDurationMs());
     }
 
     public record CanonicalMeta(String title, String artist, String isrc) {}

@@ -31,6 +31,16 @@ public class TrackMatchingService {
     // 플랫폼 매칭 실패 시 createLink 전체가 롤백되는 것을 방지
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public List<PlatformTrack> matchAll(Track track) {
+        return match(track);
+    }
+
+    // 기존 platform_tracks를 삭제한 직후에는 같은 트랜잭션에서 다시 생성해야 한다.
+    @Transactional
+    public List<PlatformTrack> rematchAll(Track track) {
+        return match(track);
+    }
+
+    private List<PlatformTrack> match(Track track) {
         List<Platform> platforms = platformRepository.findByIsActiveTrue();
 
         for (Platform platform : platforms) {
@@ -73,9 +83,24 @@ public class TrackMatchingService {
                 }
                 yield appleTrackService.searchTrack(track, platform);
             }
-            case "melon"  -> melonTrackService.searchTrack(track, platform);
-            case "flo"    -> floTrackService.searchTrack(track, platform);
-            case "genie"  -> genieTrackService.searchTrack(track, platform);
+            case "melon"  -> {
+                if (sourceUrl != null && sourceUrl.contains("melon.com")) {
+                    yield new PlatformTrack(track, platform, null, sourceUrl, track.getTitle(), track.getArtist());
+                }
+                yield melonTrackService.searchTrack(track, platform);
+            }
+            case "flo"    -> {
+                if (sourceUrl != null && sourceUrl.contains("music-flo.com")) {
+                    yield new PlatformTrack(track, platform, null, sourceUrl, track.getTitle(), track.getArtist());
+                }
+                yield floTrackService.searchTrack(track, platform);
+            }
+            case "genie"  -> {
+                if (sourceUrl != null && sourceUrl.contains("genie.co.kr")) {
+                    yield new PlatformTrack(track, platform, null, sourceUrl, track.getTitle(), track.getArtist());
+                }
+                yield genieTrackService.searchTrack(track, platform);
+            }
             default -> null;
         };
     }

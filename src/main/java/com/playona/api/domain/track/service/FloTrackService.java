@@ -117,7 +117,12 @@ public class FloTrackService {
                         if ("TRACK".equals(group.get("type"))) {
                             List<Map<String, Object>> tracks = (List<Map<String, Object>>) group.get("list");
                             if (tracks != null && !tracks.isEmpty()) {
-                                Object id = tracks.get(0).get("id");
+                                Map<String, Object> candidate = tracks.stream()
+                                        .filter(item -> isVerifiedMatch(track, item))
+                                        .findFirst()
+                                        .orElse(null);
+                                if (candidate == null) continue;
+                                Object id = candidate.get("id");
                                 if (id != null) {
                                     String trackUrl = "https://www.music-flo.com/detail/track/" + id + "/details";
                                     return new PlatformTrack(track, platform, null, trackUrl, track.getTitle(), track.getArtist());
@@ -133,6 +138,15 @@ public class FloTrackService {
         String searchUrl = "https://www.music-flo.com/search?query="
                 + URLEncoder.encode(keyword, StandardCharsets.UTF_8);
         return new PlatformTrack(track, platform, null, searchUrl, track.getTitle(), track.getArtist());
+    }
+
+    @SuppressWarnings("unchecked")
+    private boolean isVerifiedMatch(Track track, Map<String, Object> candidate) {
+        String title = (String) candidate.get("name");
+        List<Map<String, Object>> artists = (List<Map<String, Object>>) candidate.get("artistList");
+        String artist = artists != null && !artists.isEmpty() ? (String) artists.get(0).get("name") : null;
+        return TrackMatchVerifier.isConfidentMatch(
+                track.getTitle(), track.getArtist(), track.getDurationMs(), title, artist, null);
     }
 
     private String extractTrackId(String url) {

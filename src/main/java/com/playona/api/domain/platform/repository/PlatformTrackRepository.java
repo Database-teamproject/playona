@@ -10,4 +10,5 @@ import java.util.Optional;
 public interface PlatformTrackRepository extends JpaRepository<PlatformTrack, Long> {
     Optional<PlatformTrack> findByTrackAndPlatform(Track track, Platform platform);
     List<PlatformTrack> findByTrack(Track track);
+    void deleteByTrack(Track track);
 }

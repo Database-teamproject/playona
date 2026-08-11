@@ -57,6 +57,17 @@ public class LinkController {
     return ResponseEntity.ok(ApiResponse.ok(null));
   }
 
+  @PostMapping("/{shortCode}/rematch")
+  public ResponseEntity<ApiResponse<?>> rematchLink(
+      @PathVariable String shortCode,
+      @AuthenticationPrincipal String userUuid
+  ) {
+    if (userUuid == null) {
+      return ResponseEntity.status(401).body(ApiResponse.fail("로그인이 필요합니다."));
+    }
+    return ResponseEntity.ok(ApiResponse.ok(linkService.rematchLink(shortCode, userUuid)));
+  }
+
   @GetMapping("/{shortCode}")
   public ResponseEntity<ApiResponse<?>> getLink(@PathVariable String shortCode) {
     return ResponseEntity.ok(ApiResponse.ok(linkService.getLinkResponse(shortCode)));

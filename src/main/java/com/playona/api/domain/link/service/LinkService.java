@@ -148,6 +148,21 @@ public class LinkService {
         return sharedLink.getTrack().getSourceUrl();
     }
 
+    @Transactional
+    public LinkResponse rematchLink(String shortCode, String userUuid) {
+        User user = userRepository.findByUserUuid(userUuid)
+            .orElseThrow(() -> new NotFoundException("사용자를 찾을 수 없습니다."));
+        SharedLink link = sharedLinkRepository.findByShortCodeAndUser(shortCode, user)
+            .orElseThrow(() -> new NotFoundException("링크를 찾을 수 없거나 재매칭 권한이 없습니다."));
+
+        Track track = link.getTrack();
+        platformTrackRepository.deleteByTrack(track);
+        platformTrackRepository.flush();
+        trackMatchingService.rematchAll(track);
+
+        return new LinkResponse(link, baseUrl, platformTrackRepository.findByTrack(track));
+    }
+
     @Transactional(readOnly = true)
     public List<Map<String, String>> getPlatformUrls(String shortCode) {
         SharedLink sharedLink = sharedLinkRepository.findByShortCode(shortCode)
