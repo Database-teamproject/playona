@@ -22,6 +22,7 @@ import java.util.regex.Pattern;
 public class MelonTrackService {
 
     private final TrackRepository trackRepository;
+    private final WebClient webClient = WebClient.create();
 
     private static final Pattern OG_TITLE = Pattern.compile("property=\"og:title\" content=\"([^\"]+)\"");
     private static final Pattern OG_IMAGE = Pattern.compile("property=\"og:image\" content=\"([^\"]+)\"");
@@ -35,7 +36,7 @@ public class MelonTrackService {
         Track existing = trackRepository.findFirstBySourceUrl(sourceUrl).orElse(null);
         if (existing != null) return existing;
 
-        String html = WebClient.create()
+        String html = webClient
                 .get()
                 .uri(java.net.URI.create(detailUrl))
                 .header("User-Agent", "Mozilla/5.0")
@@ -48,11 +49,9 @@ public class MelonTrackService {
         Matcher titleMatcher = OG_TITLE.matcher(html);
         if (!titleMatcher.find()) throw new RuntimeException("Melon 곡 정보를 찾을 수 없습니다: " + songId);
 
-        String ogTitle = unescapeHtml(titleMatcher.group(1));
-        // "제목 - 아티스트" 형식에서 마지막 " - " 기준으로 분리
-        int sep = ogTitle.lastIndexOf(" - ");
-        String title = sep > 0 ? ogTitle.substring(0, sep).trim() : ogTitle.trim();
-        String artist = sep > 0 ? ogTitle.substring(sep + 3).trim() : "";
+        String[] metadata = extractTitleAndArtist(titleMatcher.group(1));
+        String title = metadata[0];
+        String artist = metadata[1];
 
         Matcher imageMatcher = OG_IMAGE.matcher(html);
         String thumbnail = imageMatcher.find() ? imageMatcher.group(1) : null;
@@ -67,10 +66,9 @@ public class MelonTrackService {
         String mainArtist = track.getArtist() != null ? track.getArtist().split("[,&]")[0].trim() : "";
         String rawQuery = normalizeQuery(track.getTitle()) + (mainArtist.isBlank() ? "" : " " + normalizeQuery(mainArtist));
         String query = URLEncoder.encode(rawQuery, StandardCharsets.UTF_8).replace("+", "%20");
-        String fallbackUrl = "https://www.melon.com/search/total/index.htm?q=" + query;
 
         try {
-            String html = WebClient.create()
+            String html = webClient
                     .get()
                     .uri(java.net.URI.create("https://www.melon.com/search/song/index.htm?q=" + query))
                     .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
@@ -79,15 +77,33 @@ public class MelonTrackService {
                     .block();
             String songId = extractFirstSearchSongId(html);
             if (songId != null) {
-                return new PlatformTrack(track, platform, songId,
-                        "https://www.melon.com/song/detail.htm?songId=" + songId,
-                        track.getTitle(), track.getArtist());
+                String detailUrl = "https://www.melon.com/song/detail.htm?songId=" + songId;
+                String detailHtml = webClient.get().uri(java.net.URI.create(detailUrl))
+                        .header("User-Agent", "Mozilla/5.0")
+                        .retrieve().bodyToMono(String.class).block();
+                if (detailHtml == null) return null;
+                Matcher metadataMatcher = OG_TITLE.matcher(detailHtml);
+                if (!metadataMatcher.find()) return null;
+                String[] metadata = extractTitleAndArtist(metadataMatcher.group(1));
+                if (!TrackMatchVerifier.hasMatchingTitleAndArtist(
+                        track.getTitle(), track.getArtist(), metadata[0], metadata[1])) return null;
+                return new PlatformTrack(track, platform, songId, detailUrl, metadata[0], metadata[1]);
             }
         } catch (Exception e) {
             log.warn("[Melon] 검색 결과 직접 링크 추출 실패: {}", e.getMessage());
         }
 
-        return new PlatformTrack(track, platform, null, fallbackUrl, track.getTitle(), track.getArtist());
+        return null;
+    }
+
+
+    private static String[] extractTitleAndArtist(String value) {
+        String ogTitle = unescapeHtml(value);
+        // "제목 - 아티스트" 형식에서 마지막 " - " 기준으로 분리
+        int sep = ogTitle.lastIndexOf(" - ");
+        String title = sep > 0 ? ogTitle.substring(0, sep).trim() : ogTitle.trim();
+        String artist = sep > 0 ? ogTitle.substring(sep + 3).trim() : "";
+        return new String[]{title, artist};
     }
 
     private static String normalizeQuery(String s) {

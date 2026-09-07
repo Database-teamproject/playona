@@ -23,6 +23,7 @@ import java.util.regex.Pattern;
 public class FloTrackService {
 
     private final TrackRepository trackRepository;
+    private final WebClient webClient = WebClient.create();
 
     private static final Pattern TRACK_ID = Pattern.compile("/detail/track/(\\d+)");
 
@@ -35,7 +36,7 @@ public class FloTrackService {
         if (existing != null) return existing;
 
         String apiUrl = "https://www.music-flo.com/api/meta/v1/track/" + trackId;
-        Map<String, Object> response = WebClient.create()
+        Map<String, Object> response = webClient
                 .get()
                 .uri(java.net.URI.create(apiUrl))
                 .header("User-Agent", "Mozilla/5.0")
@@ -101,7 +102,7 @@ public class FloTrackService {
                     + URLEncoder.encode(keyword, StandardCharsets.UTF_8)
                     + "&searchType=TRACK&size=1";
 
-            Map<String, Object> response = WebClient.create()
+            Map<String, Object> response = webClient
                     .get()
                     .uri(java.net.URI.create(apiUrl))
                     .header("User-Agent", "Mozilla/5.0")
@@ -134,10 +135,7 @@ public class FloTrackService {
             }
         } catch (Exception ignored) {}
 
-        // 검색 실패 시 검색 URL로 폴백
-        String searchUrl = "https://www.music-flo.com/search?query="
-                + URLEncoder.encode(keyword, StandardCharsets.UTF_8);
-        return new PlatformTrack(track, platform, null, searchUrl, track.getTitle(), track.getArtist());
+        return null;
     }
 
     @SuppressWarnings("unchecked")

@@ -133,6 +133,7 @@ public class LinkService {
 
             for (UserPlatformPreference pref : prefs) {
                 Optional<PlatformTrack> match = platformTracks.stream()
+                    .filter(pt -> !pt.isSearchFallback())
                     .filter(pt -> pt.getPlatform().getId().equals(pref.getPlatform().getId()))
                     .findFirst();
                 if (match.isPresent()) {
@@ -152,6 +153,10 @@ public class LinkService {
             .orElseThrow(() -> new NotFoundException("링크를 찾을 수 없거나 재매칭 권한이 없습니다."));
 
         Track track = link.getTrack();
+        if (track.getSourceUrl() != null
+                && (track.getSourceUrl().contains("youtube.com") || track.getSourceUrl().contains("youtu.be"))) {
+            track = youtubeTrackService.getTrackFromUrl(track.getSourceUrl());
+        }
         platformTrackRepository.deleteByTrack(track);
         platformTrackRepository.flush();
         trackMatchingService.rematchAll(track);
@@ -165,6 +170,7 @@ public class LinkService {
             .orElseThrow(() -> new NotFoundException("링크를 찾을 수 없습니다: " + shortCode));
 
         return platformTrackRepository.findByTrack(sharedLink.getTrack()).stream()
+            .filter(pt -> !pt.isSearchFallback())
             .map(pt -> Map.of(
                 "slug", pt.getPlatform().getSlug(),
                 "name", pt.getPlatform().getName(),

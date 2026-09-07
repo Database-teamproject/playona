@@ -188,7 +188,7 @@ public class AppleTrackService {
     if (trackId == null || url == null) return null;
 
     // ISRC 결과 제목이 저장된 제목과 전혀 다르면 오매칭으로 간주 → title+artist 검색으로 폴백
-    if (!isSimilar(track.getTitle(), title) && !isDifferentScript(track.getTitle(), title)) {
+    if (!isSimilar(track.getTitle(), title)) {
       log.warn("[Apple] ISRC 결과 제목 불일치 skip: '{}' vs '{}' (ISRC={})", track.getTitle(), title, isrc);
       return null;
     }
@@ -228,8 +228,7 @@ public class AppleTrackService {
         log.info("[Apple] 후보: title='{}' artist='{}'", resultTitle, resultArtist);
 
         // 제목 유사도 검사 (영어↔한국어 번역 제목은 스크립트 다름 허용)
-        if (!isSimilar(track.getTitle(), resultTitle)
-            && !isDifferentScript(track.getTitle(), resultTitle)) {
+        if (!isSimilar(track.getTitle(), resultTitle)) {
           log.info("[Apple] 제목 불일치 skip: '{}' vs '{}'", track.getTitle(), resultTitle);
           continue;
         }
@@ -239,8 +238,7 @@ public class AppleTrackService {
             ? track.getArtist().split("[,&]")[0].trim() : "";
         String mainResultArtist = resultArtist != null
             ? resultArtist.split("[,&]")[0].trim() : "";
-        if (!isSimilar(mainStoredArtist, mainResultArtist)
-            && !isDifferentScript(mainStoredArtist, mainResultArtist)) {
+        if (!isSimilar(mainStoredArtist, mainResultArtist)) {
           log.info("[Apple] 아티스트 불일치 skip: '{}' vs '{}'", mainStoredArtist, mainResultArtist);
           continue;
         }
@@ -290,41 +288,7 @@ public class AppleTrackService {
    * trackRepository.save()가 부모 트랜잭션에 반영됨.
    */
   public void enrichKoreanMetadata(Track track) {
-    if (track.getTitle() == null || track.getTitle().matches(".*[가-힣].*")) return;
-    try {
-      String mainArtist = track.getArtist() != null ? track.getArtist().split("[,&]")[0].trim() : "";
-      String rawQuery = normalizeQuery(track.getTitle()) + (mainArtist.isBlank() ? "" : " " + normalizeQuery(mainArtist));
-      String query = URLEncoder.encode(rawQuery, StandardCharsets.UTF_8)
-          .replace("+", "%20");
-      String searchUrl = "https://itunes.apple.com/search?term=" + query
-          + "&entity=song&limit=3&country=kr";
-
-      Map response = getAppleResponseAsMap(searchUrl, "iTunes KR enrich failed");
-      List results = (List) response.get("results");
-      if (results == null || results.isEmpty()) return;
-
-      for (Object obj : results) {
-        Map item = (Map) obj;
-        String krTitle = (String) item.get("trackName");
-        String krArtist = (String) item.get("artistName");
-        if (krTitle == null || !krTitle.matches(".*[가-힣].*")) continue;
-
-        boolean updated = false;
-        log.info("[Apple] KR enrichment 제목: '{}' → '{}'", track.getTitle(), krTitle);
-        track.setTitle(krTitle);
-        updated = true;
-
-        if (krArtist != null && krArtist.matches(".*[가-힣].*")
-            && track.getArtist() != null && !track.getArtist().matches(".*[가-힣].*")) {
-          log.info("[Apple] KR enrichment 아티스트: '{}' → '{}'", track.getArtist(), krArtist);
-          track.setArtist(krArtist);
-        }
-        if (updated) trackRepository.save(track);
-        return;
-      }
-    } catch (Exception e) {
-      log.warn("[Apple] KR enrichment 실패: {}", e.getMessage(), e);
-    }
+    // 제목·가수만으로 다른 문자 체계의 곡을 동일 곡이라 증명할 수 없으므로, ISRC 매칭에서만 보정한다.
   }
 
   private static String normalizeQuery(String s) {

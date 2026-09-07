@@ -54,6 +54,13 @@ public class PlatformTrack {
   @Column(name = "updated_at")
   private LocalDateTime updatedAt;
 
+  public boolean isSearchFallback() {
+    return switch (platform.getSlug()) {
+      case "flo", "genie", "melon" -> url == null || url.contains("/search");
+      default -> false;
+    };
+  }
+
   @PrePersist
   protected void onCreate() {
     createdAt = LocalDateTime.now();

@@ -32,6 +32,7 @@ public class LinkResponse {
     String trackThumbnail = sharedLink.getTrack().getThumbnailUrl() != null
             ? sharedLink.getTrack().getThumbnailUrl() : "";
     this.platforms = platformTracks.stream()
+            .filter(pt -> !pt.isSearchFallback())
             .map(pt -> Map.of(
                     "slug", pt.getPlatform().getSlug(),
                     "name", pt.getPlatform().getName(),

@@ -45,7 +45,7 @@ public class TrackMatchingService {
 
         for (Platform platform : platforms) {
             var existing = platformTrackRepository.findByTrackAndPlatform(track, platform);
-            if (existing.isPresent() && !isSearchFallback(platform, existing.get())) {
+            if (existing.isPresent() && isSourcePlatform(track, platform)) {
                 continue;
             }
             existing.ifPresent(platformTrackRepository::delete);
@@ -67,10 +67,17 @@ public class TrackMatchingService {
         return platformTrackRepository.findByTrack(track);
     }
 
-    private boolean isSearchFallback(Platform platform, PlatformTrack platformTrack) {
-        return "flo".equals(platform.getSlug())
-            && platformTrack.getUrl() != null
-            && platformTrack.getUrl().contains("music-flo.com/search");
+    private boolean isSourcePlatform(Track track, Platform platform) {
+        String sourceUrl = track.getSourceUrl();
+        return sourceUrl != null && switch (platform.getSlug()) {
+            case "spotify" -> sourceUrl.contains("spotify.com");
+            case "ytmusic" -> sourceUrl.contains("youtube.com") || sourceUrl.contains("youtu.be");
+            case "apple" -> sourceUrl.contains("music.apple.com");
+            case "melon" -> sourceUrl.contains("melon.com");
+            case "flo" -> sourceUrl.contains("music-flo.com");
+            case "genie" -> sourceUrl.contains("genie.co.kr");
+            default -> false;
+        };
     }
 
     private PlatformTrack matchToPlatform(Track track, Platform platform) {

@@ -158,14 +158,6 @@ public class SpotifyTrackService {
                             simplifiedTitle);
                 }
             }
-            if (item == null && track.getIsrc() == null) {
-                String globalTitle = appleTrackService.findGlobalTitle(track);
-                if (globalTitle != null && !globalTitle.equalsIgnoreCase(track.getTitle())) {
-                    item = findVerifiedMatch(track,
-                            "track:" + globalTitle + " artist:" + cleanArtistForSearch(track.getArtist()),
-                            globalTitle);
-                }
-            }
             if (item == null) return null;
             String foundTrackId = item.getId();
             String foundUrl = "https://open.spotify.com/track/" + foundTrackId;
