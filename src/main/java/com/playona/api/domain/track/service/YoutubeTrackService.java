@@ -313,7 +313,7 @@ public class YoutubeTrackService {
   static SourceMetadata extractSourceMetadata(String rawTitle, String channelTitle) {
     if (rawTitle == null || channelTitle == null) return null;
     String title = rawTitle.replaceFirst("(?iu)^\\s*\\[(?:official\\s+)?(?:mv|music\\s+video|audio)\\]\\s*", "")
-        .replaceFirst("(?iu)\\s*[-|]?\\s*(official\\s+)?(?:music\\s+video|video|audio)\\s*$", "").trim();
+        .replaceFirst("(?iu)\\s*[-|/]?\\s*(official\\s+)?(?:music\\s+video|video|audio)\\s*$", "").trim();
     String channelArtist = cleanArtist(channelTitle);
     if (channelTitle.endsWith("- Topic") && !title.isBlank()) {
       return new SourceMetadata(removeArtistPrefix(title, channelArtist), channelArtist);

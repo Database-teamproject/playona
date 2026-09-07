@@ -61,6 +61,9 @@ class YoutubeTrackServiceTest {
         YoutubeTrackService.extractSourceMetadata("[MV] IU - 밤편지", "1theK"));
     assertEquals(new YoutubeTrackService.SourceMetadata("밤편지", "아이유"),
         YoutubeTrackService.extractSourceMetadata("아이유 - 밤편지 Official Music Video", "1theK"));
+    assertEquals(new YoutubeTrackService.SourceMetadata("문득(eternal)", "윤지영(Yoon Jiyoung)"),
+        YoutubeTrackService.extractSourceMetadata(
+            "[MV] 윤지영(Yoon Jiyoung) - 문득(eternal) / Official Music Video", "POCLANOS"));
     assertEquals(new YoutubeTrackService.SourceMetadata("밤편지 (Live)", "아이유"),
         YoutubeTrackService.extractSourceMetadata("아이유 - 밤편지 (Live)", "아이유 - Topic"));
     assertNull(YoutubeTrackService.extractSourceMetadata("밤편지", "가사 채널"));
