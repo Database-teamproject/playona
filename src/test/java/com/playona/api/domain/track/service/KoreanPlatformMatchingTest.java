@@ -22,6 +22,17 @@ class KoreanPlatformMatchingTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"flo", "genie", "melon"})
+    void matchesYoutubeBilingualMetadataWithoutChangingSource(String slug) {
+        Track source = new Track("문득(eternal)", "윤지영(Yoon Jiyoung)", null,
+                "https://www.youtube.com/watch?v=zv8BmkasGwM");
+        assertNotNull(search(slug, results(slug, "문득", "윤지영"), "문득", "윤지영", HttpStatus.OK, source));
+        assertNull(search(slug, results(slug, "문득 (Live)", "윤지영"), "문득 (Live)", "윤지영", HttpStatus.OK, source));
+        assertEquals("문득(eternal)", source.getTitle());
+        assertEquals("윤지영(Yoon Jiyoung)", source.getArtist());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"flo", "genie", "melon"})
     void excludesEmptyResultsAndApiErrors(String slug) {
         assertNull(search(slug, "", "", "", HttpStatus.OK));
         assertNull(search(slug, "", "", "", HttpStatus.TOO_MANY_REQUESTS));
@@ -59,6 +70,11 @@ class KoreanPlatformMatchingTest {
     }
 
     private PlatformTrack search(String slug, String searchBody, String title, String artist, HttpStatus status) {
+        return search(slug, searchBody, title, artist, status,
+                new Track("밤편지", "아이유", null, "https://music.youtube.com/watch?v=example"));
+    }
+
+    private PlatformTrack search(String slug, String searchBody, String title, String artist, HttpStatus status, Track track) {
         TrackRepository repository = mock(TrackRepository.class);
         Object service = switch (slug) {
             case "flo" -> new FloTrackService(repository);
@@ -75,7 +91,6 @@ class KoreanPlatformMatchingTest {
                     .body(body).build());
         }).build();
         ReflectionTestUtils.setField(service, "webClient", client);
-        Track track = new Track("밤편지", "아이유", null, "https://music.youtube.com/watch?v=example");
         Platform platform = platform(slug);
         PlatformTrack result = switch (slug) {
             case "flo" -> ((FloTrackService) service).searchTrack(track, platform);

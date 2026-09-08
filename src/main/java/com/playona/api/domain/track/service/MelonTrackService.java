@@ -63,8 +63,8 @@ public class MelonTrackService {
     public PlatformTrack searchTrack(Track track, Platform platform) {
         if (track.getTitle() == null) return null;
 
-        String mainArtist = track.getArtist() != null ? track.getArtist().split("[,&]")[0].trim() : "";
-        String rawQuery = normalizeQuery(track.getTitle()) + (mainArtist.isBlank() ? "" : " " + normalizeQuery(mainArtist));
+        String mainArtist = TrackMatchVerifier.names(TrackMatchVerifier.firstArtist(track.getArtist())).get(0);
+        String rawQuery = normalizeQuery(TrackMatchVerifier.names(track.getTitle()).get(0)) + (mainArtist.isBlank() ? "" : " " + normalizeQuery(mainArtist));
         String query = URLEncoder.encode(rawQuery, StandardCharsets.UTF_8).replace("+", "%20");
 
         try {

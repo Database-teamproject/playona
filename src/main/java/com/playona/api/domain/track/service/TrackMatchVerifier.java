@@ -1,6 +1,15 @@
 package com.playona.api.domain.track.service;
 
+import java.text.Normalizer;
+import java.util.List;
+import java.util.Locale;
+import java.util.regex.Pattern;
+
 final class TrackMatchVerifier {
+
+  private static final Pattern ALIAS = Pattern.compile("^([^()\\[\\]]+?)\\s*[（(]([^()（）]+)[）)]$");
+  private static final Pattern VERSION = Pattern.compile(
+      "(?i)\\b(live|remix|mix|acoustic|instrumental|inst|version|ver|edit|cover|demo|remaster(?:ed)?|sped|slowed|karaoke)\\b|라이브|리믹스|어쿠스틱|반주|버전");
 
   private TrackMatchVerifier() {}
 
@@ -16,14 +25,33 @@ final class TrackMatchVerifier {
         && isSimilar(firstArtist(artist), firstArtist(candidateArtist));
   }
 
-  private static boolean isSimilar(String left, String right) {
-    String normalizedLeft = normalize(left);
-    String normalizedRight = normalize(right);
-    if (normalizedLeft.isEmpty() || normalizedRight.isEmpty()) return false;
-    int shorter = Math.min(normalizedLeft.length(), normalizedRight.length());
-    int longer = Math.max(normalizedLeft.length(), normalizedRight.length());
-    return shorter >= longer * 0.6
-        && (normalizedLeft.contains(normalizedRight) || normalizedRight.contains(normalizedLeft));
+  static boolean isSimilar(String left, String right) {
+    return names(left).stream().map(TrackMatchVerifier::normalize)
+        .filter(name -> !name.isEmpty())
+        .anyMatch(name -> names(right).stream().map(TrackMatchVerifier::normalize).anyMatch(name::equals));
+  }
+
+  // Only explicit alternate scripts are aliases; version labels remain part of the title.
+  static List<String> names(String value) {
+    if (value == null) return List.of("");
+    String cleaned = value.replaceAll("(?i)\\s*[\\(\\[]\\s*(feat|ft|featuring)\\.?[^)\\]]*[\\)\\]]", "").trim();
+    var alias = ALIAS.matcher(cleaned);
+    if (alias.matches() && !VERSION.matcher(cleaned).find()) {
+      String base = alias.group(1).trim();
+      String alternate = alias.group(2).trim();
+      if ((isLatin(base) && isAsian(alternate)) || (isAsian(base) && isLatin(alternate))) {
+        return List.of(base, alternate);
+      }
+    }
+    return List.of(cleaned);
+  }
+
+  private static boolean isLatin(String value) {
+    return value.matches(".*[a-zA-Z].*") && !value.matches(".*[가-힣\\u3040-\\u30ff\\u4e00-\\u9fff].*");
+  }
+
+  private static boolean isAsian(String value) {
+    return value.matches(".*[가-힣\\u3040-\\u30ff\\u4e00-\\u9fff].*") && !value.matches(".*[a-zA-Z].*");
   }
 
   private static boolean hasCompatibleDuration(Integer durationMs, Integer candidateDurationMs) {
@@ -31,15 +59,23 @@ final class TrackMatchVerifier {
         || Math.abs(durationMs.longValue() - candidateDurationMs) <= 15_000L;
   }
 
-  private static String firstArtist(String artist) {
-    return artist == null ? "" : artist.split("[,&]")[0];
+  static String firstArtist(String artist) {
+    if (artist == null) return "";
+    int depth = 0;
+    for (int i = 0; i < artist.length(); i++) {
+      char c = artist.charAt(i);
+      if (c == '(' || c == '（') depth++;
+      if (c == ')' || c == '）') depth--;
+      if (depth == 0 && (c == ',' || c == '&')) return artist.substring(0, i).trim();
+    }
+    return artist.trim();
   }
 
   private static String normalize(String value) {
     if (value == null) return "";
-    return value
+    return Normalizer.normalize(value, Normalizer.Form.NFKC)
         .replaceAll("(?i)\\s*[\\(\\[]\\s*(feat|ft|featuring)\\.?[^)\\]]*[\\)\\]]", "")
-        .toLowerCase()
-        .replaceAll("[^a-z0-9가-힣\\u3040-\\u30ff\\u4e00-\\u9fff]", "");
+        .toLowerCase(Locale.ROOT)
+        .replaceAll("[^\\p{L}\\p{N}]", "");
   }
 }

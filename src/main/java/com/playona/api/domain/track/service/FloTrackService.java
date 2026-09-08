@@ -92,15 +92,13 @@ public class FloTrackService {
     public PlatformTrack searchTrack(Track track, Platform platform) {
         if (track.getTitle() == null) return null;
 
-        String mainArtist = track.getArtist() != null
-                ? track.getArtist().split("[,&]")[0].trim()
-                : "";
-        String keyword = track.getTitle() + " " + mainArtist;
+        String mainArtist = TrackMatchVerifier.names(TrackMatchVerifier.firstArtist(track.getArtist())).get(0);
+        String keyword = TrackMatchVerifier.names(track.getTitle()).get(0) + " " + mainArtist;
 
         try {
             String apiUrl = "https://www.music-flo.com/api/search/v2/search?keyword="
                     + URLEncoder.encode(keyword, StandardCharsets.UTF_8)
-                    + "&searchType=TRACK&size=1";
+                    + "&searchType=TRACK&size=5";
 
             Map<String, Object> response = webClient
                     .get()
