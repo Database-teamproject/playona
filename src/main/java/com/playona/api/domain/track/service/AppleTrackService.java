@@ -23,6 +23,8 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AppleTrackService {
 
+  private final WebClient webClient = WebClient.create();
+
   private final TrackRepository trackRepository;
   private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -188,7 +190,7 @@ public class AppleTrackService {
     if (trackId == null || url == null) return null;
 
     // ISRC 결과 제목이 저장된 제목과 전혀 다르면 오매칭으로 간주 → title+artist 검색으로 폴백
-    if (!isSimilar(track.getTitle(), title)) {
+    if (!TrackMatchVerifier.hasMatchingTitleAndArtist(track.getTitle(), track.getArtist(), title, artist)) {
       log.warn("[Apple] ISRC 결과 제목 불일치 skip: '{}' vs '{}' (ISRC={})", track.getTitle(), title, isrc);
       return null;
     }
@@ -199,13 +201,17 @@ public class AppleTrackService {
   private PlatformTrack searchAppleByTitleArtist(Track track, Platform platform) {
     if (track.getTitle() == null || track.getArtist() == null) return null;
 
-    // 다중 아티스트 쿼리는 iTunes 검색 품질 저하 → 첫 번째 아티스트만 사용
-    String mainArtist = track.getArtist().split("[,&]")[0].trim();
-    // (2025) / [2025] 연도 접미사 제거 후 나머지 괄호도 공백으로 교체
-    String cleanTitle = track.getTitle()
-        .replaceAll("[\\(\\[]\\d{4}[\\)\\]]", "")
-        .replaceAll("[\\(\\)\\[\\]\\{\\}]", " ")
-        .replaceAll("\\s+", " ").trim();
+    for (String mainArtist : TrackMatchVerifier.artistNames(track.getArtist())) {
+      for (String cleanTitle : TrackMatchVerifier.names(track.getTitle())) {
+        PlatformTrack result = searchAppleQuery(track, platform, cleanTitle, mainArtist);
+        if (result != null) return result;
+      }
+    }
+    log.warn("[Apple] 매칭 실패 - title: '{}', artist: '{}'", track.getTitle(), track.getArtist());
+    return null;
+  }
+
+  private PlatformTrack searchAppleQuery(Track track, Platform platform, String cleanTitle, String mainArtist) {
     String query = cleanTitle + " " + mainArtist;
     String encoded = URLEncoder.encode(query, StandardCharsets.UTF_8).replace("+", "%20");
     log.info("[Apple] title+artist 검색 시작 - query: '{}', title: '{}', mainArtist: '{}'",
@@ -227,18 +233,16 @@ public class AppleTrackService {
         String resultArtist = (String) item.get("artistName");
         log.info("[Apple] 후보: title='{}' artist='{}'", resultTitle, resultArtist);
 
-        // 제목 유사도 검사 (영어↔한국어 번역 제목은 스크립트 다름 허용)
+        // Compare only explicit title aliases and verified artist identities.
         if (!isSimilar(track.getTitle(), resultTitle)) {
           log.info("[Apple] 제목 불일치 skip: '{}' vs '{}'", track.getTitle(), resultTitle);
           continue;
         }
 
         // 아티스트 비교: 양쪽 모두 첫 번째 아티스트만 추출
-        String mainStoredArtist = track.getArtist() != null
-            ? track.getArtist().split("[,&]")[0].trim() : "";
-        String mainResultArtist = resultArtist != null
-            ? resultArtist.split("[,&]")[0].trim() : "";
-        if (!isSimilar(mainStoredArtist, mainResultArtist)) {
+        String mainStoredArtist = TrackMatchVerifier.firstArtist(track.getArtist());
+        String mainResultArtist = TrackMatchVerifier.firstArtist(resultArtist);
+        if (!TrackMatchVerifier.hasMatchingArtist(mainStoredArtist, mainResultArtist)) {
           log.info("[Apple] 아티스트 불일치 skip: '{}' vs '{}'", mainStoredArtist, mainResultArtist);
           continue;
         }
@@ -248,12 +252,11 @@ public class AppleTrackService {
         String url = (String) item.get("trackViewUrl");
         if (trackId == null || url == null) continue;
 
-        String krUrl = cleanAppleUrl(url);
-        log.info("[Apple] 매칭 성공: '{}' - '{}'", resultTitle, krUrl);
-        return new PlatformTrack(track, platform, trackId, krUrl, resultTitle, resultArtist);
+        String verifiedUrl = cleanAppleUrl(url);
+        log.info("[Apple] 매칭 성공: '{}' - '{}'", resultTitle, verifiedUrl);
+        return new PlatformTrack(track, platform, trackId, verifiedUrl, resultTitle, resultArtist);
       }
     }
-    log.warn("[Apple] 매칭 실패 - title: '{}', artist: '{}'", track.getTitle(), track.getArtist());
     return null;
   }
 
@@ -299,15 +302,14 @@ public class AppleTrackService {
 
   private String cleanAppleUrl(String url) {
     if (url == null) return null;
-    return url.replaceFirst("music\\.apple\\.com/[a-z]{2}/", "music.apple.com/kr/")
-              .replaceAll("\\?uo=\\d+&", "?")   // uo= 첫 번째 파라미터이고 뒤에 더 있는 경우
+    return url.replaceAll("\\?uo=\\d+&", "?")   // Preserve the storefront where the song was found.
               .replaceAll("[?&]uo=\\d+", "")     // uo= 마지막 또는 유일한 파라미터인 경우
               .replaceAll("\\?$", "");
   }
 
   private Map getAppleResponseAsMap(String url, String errorMessage) {
     try {
-      String responseBody = WebClient.create()
+      String responseBody = webClient
               .get()
               .uri(java.net.URI.create(url))
               .retrieve()

@@ -13,6 +13,23 @@ final class TrackMatchVerifier {
 
   private TrackMatchVerifier() {}
 
+  // Verified artist identity: https://linktr.ee/WhysYoung (윤지영 / Whys Young).
+  // Keep curated aliases artist-only; never infer identity from a similar song title.
+  private static final List<String> WHYS_YOUNG_NAMES = List.of("Whys Young", "윤지영", "Yoon Jiyoung");
+
+  static List<String> artistNames(String artist) {
+    List<String> explicit = names(firstArtist(artist));
+    if (explicit.stream().anyMatch(name -> WHYS_YOUNG_NAMES.stream().anyMatch(alias -> isSimilar(name, alias)))) {
+      return WHYS_YOUNG_NAMES;
+    }
+    return explicit;
+  }
+
+  static boolean hasMatchingArtist(String left, String right) {
+    return artistNames(left).stream()
+        .anyMatch(name -> artistNames(right).stream().anyMatch(candidate -> isSimilar(name, candidate)));
+  }
+
   static boolean isConfidentMatch(String title, String artist, Integer durationMs,
       String candidateTitle, String candidateArtist, Integer candidateDurationMs) {
     return hasMatchingTitleAndArtist(title, artist, candidateTitle, candidateArtist)
@@ -22,7 +39,7 @@ final class TrackMatchVerifier {
   static boolean hasMatchingTitleAndArtist(String title, String artist,
       String candidateTitle, String candidateArtist) {
     return isSimilar(title, candidateTitle)
-        && isSimilar(firstArtist(artist), firstArtist(candidateArtist));
+        && hasMatchingArtist(artist, candidateArtist);
   }
 
   static boolean isSimilar(String left, String right) {

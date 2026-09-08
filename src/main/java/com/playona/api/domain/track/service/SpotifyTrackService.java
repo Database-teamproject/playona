@@ -151,11 +151,13 @@ public class SpotifyTrackService {
 
             var item = findVerifiedMatch(track, query, track.getTitle());
             if (item == null && track.getIsrc() == null) {
-                String simplifiedTitle = cleanTitleForSearch(track.getTitle());
-                if (!simplifiedTitle.equals(track.getTitle())) {
+                for (String artist : TrackMatchVerifier.artistNames(track.getArtist())) {
+                  for (String title : TrackMatchVerifier.names(track.getTitle())) {
                     item = findVerifiedMatch(track,
-                            "track:" + simplifiedTitle + " artist:" + cleanArtistForSearch(track.getArtist()),
-                            simplifiedTitle);
+                            "track:" + title + " artist:" + artist, track.getTitle());
+                    if (item != null) break;
+                  }
+                  if (item != null) break;
                 }
             }
             if (item == null) return null;

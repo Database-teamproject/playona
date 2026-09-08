@@ -8,6 +8,19 @@ import org.junit.jupiter.api.Test;
 class TrackMatchVerifierTest {
 
   @Test
+  void acceptsVerifiedArtistRenameButKeepsTitleAndDurationChecks() {
+    assertTrue(TrackMatchVerifier.isConfidentMatch(
+        "문득(eternal)", "윤지영(Yoon Jiyoung)", 169000, "eternal", "Whys Young", 169000));
+    assertTrue(TrackMatchVerifier.hasMatchingArtist("Whys Young", "윤지영"));
+    assertFalse(TrackMatchVerifier.hasMatchingArtist("윤지영", "Whys Young Band"));
+    assertFalse(TrackMatchVerifier.isSimilar("윤지영", "Whys Young"));
+    assertFalse(TrackMatchVerifier.isConfidentMatch(
+        "문득(eternal)", "윤지영", 169000, "eternal (Live)", "Whys Young", 169000));
+    assertFalse(TrackMatchVerifier.isConfidentMatch(
+        "문득(eternal)", "윤지영", 169000, "eternal", "Whys Young", 220000));
+  }
+
+  @Test
   void matchesExplicitAliasesInEitherDirection() {
     for (String title : new String[]{"문득", "eternal"}) {
       for (String artist : new String[]{"윤지영", "Yoon Jiyoung"}) {
