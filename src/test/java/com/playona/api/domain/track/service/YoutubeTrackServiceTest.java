@@ -27,6 +27,31 @@ import reactor.core.publisher.Mono;
 
 class YoutubeTrackServiceTest {
 
+  @Test
+  void acceptsOfficialLyricVideoOnArtistChannelButRejectsFanUploadsAndOtherVersions() throws Exception {
+    String title = "Mrs. GREEN APPLE「soFt-dRink」Official Lyric Video";
+    assertFalse(YoutubeTrackService.isUnsupportedSourceVideo(title, "Mrs. GREEN APPLE"));
+    assertTrue(YoutubeTrackService.isUnsupportedSourceVideo(title, "Fan Lyrics"));
+    assertTrue(YoutubeTrackService.isUnsupportedSourceVideo(
+        "Mrs. GREEN APPLE - soFt-dRink Lyrics", "Mrs. GREEN APPLE"));
+    assertTrue(YoutubeTrackService.isUnsupportedSourceVideo(
+        "Mrs. GREEN APPLE「soFt-dRink (Live)」Official Lyric Video", "Mrs. GREEN APPLE"));
+    assertEquals(new YoutubeTrackService.SourceMetadata("soFt-dRink", "Mrs. GREEN APPLE"),
+        YoutubeTrackService.extractSourceMetadata(title, "Mrs. GREEN APPLE"));
+
+    TrackRepository repository = mock(TrackRepository.class);
+    YoutubeTrackService service = new YoutubeTrackService(repository);
+    String response = new ObjectMapper().writeValueAsString(Map.of("items", List.of(Map.of(
+        "snippet", Map.of("categoryId", "10", "liveBroadcastContent", "none",
+            "title", title, "channelTitle", "Mrs. GREEN APPLE", "description", ""),
+        "contentDetails", Map.of("duration", "PT3M")))));
+    ReflectionTestUtils.setField(service, "webClient", jsonClient(response));
+    Track result = service.getTrackFromUrl("https://music.youtube.com/watch?v=vt9YVvYFitg&si=example");
+    assertEquals("soFt-dRink", result.getTitle());
+    assertEquals("Mrs. GREEN APPLE", result.getArtist());
+    verify(repository).save(result);
+  }
+
   private static final String COMPILATION_DESCRIPTION = """
       썸네일: 핀터레스트
       0:00 Je te laisserai des mots - Patrick Watson

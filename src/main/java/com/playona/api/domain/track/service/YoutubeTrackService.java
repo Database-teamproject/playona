@@ -80,7 +80,7 @@ public class YoutubeTrackService {
     }
     SourceMetadata metadata = extractSourceMetadata(rawTitle,
         snippet != null ? (String) snippet.get("channelTitle") : null);
-    if (metadata == null || isUnsupportedSourceVideo(rawTitle)) {
+    if (metadata == null || isUnsupportedSourceVideo(rawTitle, (String) snippet.get("channelTitle"))) {
       throw new IllegalArgumentException("공식 음원 또는 뮤직비디오 링크만 통합 링크로 만들 수 있습니다.");
     }
 
@@ -158,9 +158,11 @@ public class YoutubeTrackService {
         String channelTitle = (String) snippet.get("channelTitle");
         String videoTitle = (String) snippet.get("title");
         String candidateArtist = cleanArtist(channelTitle);
-        if (!isOfficialChannel(artist, channelTitle) || isNoiseVideo(videoTitle)
+        SourceMetadata metadata = extractSourceMetadata(videoTitle, channelTitle);
+        String candidateTitle = metadata == null ? videoTitle : metadata.title();
+        if (!isOfficialChannel(artist, channelTitle) || isNoiseVideo(videoTitle, channelTitle)
             || !TrackMatchVerifier.hasMatchingTitleAndArtist(
-                track.getTitle(), artist, videoTitle, candidateArtist)) {
+                track.getTitle(), artist, candidateTitle, candidateArtist)) {
           continue;
         }
 
@@ -288,8 +290,9 @@ public class YoutubeTrackService {
   }
 
   /** 가사/라이브/커버/MV 등 노이즈 영상 여부 판단 */
-  private boolean isNoiseVideo(String title) {
+  private boolean isNoiseVideo(String title, String channelTitle) {
     if (title == null) return false;
+    title = withoutOfficialLyricLabel(title, channelTitle);
     String lower = title.toLowerCase();
     return Pattern.compile("(?iu)\\b(live|concert|tour|lyrics?|cover|reaction|karaoke|remix|fancam)\\b|라이브|공연|콘서트|가사|커버|리액션|노래방|반주|모음|직캠")
         .matcher(title).find()
@@ -313,10 +316,14 @@ public class YoutubeTrackService {
   static SourceMetadata extractSourceMetadata(String rawTitle, String channelTitle) {
     if (rawTitle == null || channelTitle == null) return null;
     String title = rawTitle.replaceFirst("(?iu)^\\s*\\[(?:official\\s+)?(?:mv|music\\s+video|audio)\\]\\s*", "")
-        .replaceFirst("(?iu)\\s*[-|/]?\\s*(official\\s+)?(?:music\\s+video|video|audio)\\s*$", "").trim();
+        .replaceFirst("(?iu)\\s*[-|/]?\\s*(?:official\\s+lyrics?\\s+video|(?:official\\s+)?(?:music\\s+video|video|audio))\\s*$", "").trim();
     String channelArtist = cleanArtist(channelTitle);
     if (channelTitle.endsWith("- Topic") && !title.isBlank()) {
       return new SourceMetadata(removeArtistPrefix(title, channelArtist), channelArtist);
+    }
+    var quotedTitle = Pattern.compile("^(.+?)\\s*「([^「」]+)」$").matcher(title);
+    if (quotedTitle.matches()) {
+      return new SourceMetadata(quotedTitle.group(2).trim(), quotedTitle.group(1).trim());
     }
     String[] parts = title.split("\\s+-\\s+", 2);
     if (parts.length == 2 && !parts[0].isBlank() && !parts[1].isBlank()) {
@@ -325,7 +332,18 @@ public class YoutubeTrackService {
     return null;
   }
 
-  private static boolean isUnsupportedSourceVideo(String title) {
+  // ponytail: channel-name agreement is a heuristic, not a verified channel ID registry.
+  private static String withoutOfficialLyricLabel(String title, String channelTitle) {
+    if (title == null) return null;
+    SourceMetadata metadata = extractSourceMetadata(title, channelTitle);
+    if (metadata != null && TrackMatchVerifier.hasMatchingArtist(metadata.artist(), cleanArtist(channelTitle))) {
+      return title.replaceFirst("(?iu)\\bofficial\\s+lyrics?\\s+video\\s*$", "");
+    }
+    return title;
+  }
+
+  static boolean isUnsupportedSourceVideo(String title, String channelTitle) {
+    title = withoutOfficialLyricLabel(title, channelTitle);
     return title == null || Pattern.compile("(?iu)\\b(live|concert|tour|lyrics?|cover|reaction|karaoke|remix|fancam)\\b|라이브|공연|콘서트|가사|커버|리액션|노래방|반주|직캠")
         .matcher(title).find();
   }
