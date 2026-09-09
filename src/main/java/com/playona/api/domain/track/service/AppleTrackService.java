@@ -34,7 +34,7 @@ public class AppleTrackService {
 
     String lookupUrl = "https://itunes.apple.com/lookup?id=" +
             URLEncoder.encode(trackId, StandardCharsets.UTF_8) +
-            "&entity=song";
+            "&entity=song&country=" + storefront(url);
 
     Map response = getAppleResponseAsMap(lookupUrl, "Failed to parse Apple lookup response");
 
@@ -66,12 +66,7 @@ public class AppleTrackService {
     String sourceUrl = cleanAppleUrl((String) item.get("trackViewUrl"));
     String thumbnail = (String) item.get("artworkUrl100");
 
-    Integer durationMs = null;
-    if (item.get("trackTimeMillis") instanceof Integer ms) {
-      durationMs = ms;
-    } else if (item.get("trackTimeMillis") instanceof Number n) {
-      durationMs = n.intValue();
-    }
+    Integer durationMs = item.get("trackTimeMillis") instanceof Number n ? n.intValue() : null;
 
     LocalDate releaseDate = null;
     String releaseDateStr = (String) item.get("releaseDate");
@@ -82,8 +77,9 @@ public class AppleTrackService {
       }
     }
 
-    if (isrc != null && trackRepository.existsByIsrc(isrc)) {
-      return trackRepository.findByIsrc(isrc).orElseThrow();
+    if (isrc != null) {
+      var existing = trackRepository.findFirstByIsrcOrderByIdAsc(isrc);
+      if (existing.isPresent()) return existing.get();
     }
 
     Track existingTrack = trackRepository.findFirstBySourceUrl(sourceUrl).orElse(null);
@@ -120,6 +116,63 @@ public class AppleTrackService {
     throw new IllegalArgumentException("Could not extract Apple Music track ID from URL: " + url);
   }
 
+  /** Video runtime includes footage; resolve recording length using exact catalog identity first. */
+  public void enrichMusicVideoMetadata(Track track) {
+    enrichRecordingMetadata(track, true);
+  }
+
+  public void enrichTopicMetadata(Track track) {
+    enrichRecordingMetadata(track, false);
+  }
+
+  private void enrichRecordingMetadata(Track track, boolean musicVideo) {
+    if (track.getDurationMs() == null || track.getReleaseDate() == null) return;
+    try {
+      // Only music videos omit runtime in the probe; Topic audio keeps duration/date verification.
+      Track probe = musicVideo ? new Track(track.getTitle(), track.getArtist(), null, null) : track;
+      PlatformTrack recording = searchAppleByTitleArtist(probe, null);
+      if (recording == null) return;
+      String id = recording.getPlatformTrackId();
+      for (String country : new java.util.LinkedHashSet<>(List.of("kr", "us", storefront(recording.getUrl())))) {
+        try {
+          Map response = getAppleResponseAsMap("https://itunes.apple.com/lookup?id="
+              + URLEncoder.encode(id, StandardCharsets.UTF_8) + "&entity=song&country=" + country,
+              "Failed to read recording metadata");
+          if (!(response.get("results") instanceof List results)) continue;
+          for (Object result : results) {
+            Map item = (Map) result;
+            if (!id.equals(String.valueOf(item.get("trackId")))
+                || (!"kr".equals(country)
+                    && !TrackMatchVerifier.hasMatchingArtist(track.getArtist(), (String) item.get("artistName")))
+                || !track.getReleaseDate().equals(parseReleaseDate((String) item.get("releaseDate")))) continue;
+            if (!(item.get("trackTimeMillis") instanceof Number duration)
+                || duration.intValue() <= 0
+                || (musicVideo ? duration.intValue() > track.getDurationMs()
+                    : Math.abs(duration.longValue() - track.getDurationMs()) > 2_000L)) continue;
+            String title = (String) item.get("trackName");
+            if ("kr".equals(country) && (title == null || !title.matches(".*[가-힣].*"))) continue;
+            track.setDurationMs(duration.intValue());
+            if ("kr".equals(country)) {
+              // The verified catalog ID links localized names; keep the original searchable as an alias.
+              track.setTitle(TrackMatchVerifier.explicitAlias(title, track.getTitle()));
+              String artist = (String) item.get("artistName");
+              if (artist != null && !artist.isBlank()) {
+                track.setArtist(TrackMatchVerifier.explicitAlias(artist, track.getArtist()));
+              }
+            } else {
+              track.setTitle(TrackMatchVerifier.explicitAlias(track.getTitle(), title));
+            }
+            return;
+          }
+        } catch (Exception e) {
+          log.warn("[Apple] {} 음원 메타데이터 확인 실패: {}", country, e.getMessage());
+        }
+      }
+    } catch (Exception e) {
+      log.warn("[Apple] 영상의 음원 메타데이터 확인 실패: {}", e.getMessage());
+    }
+  }
+
   public PlatformTrack searchTrack(Track track, Platform platform) {
     try {
       // 1. ISRC 기반 매칭 우선
@@ -129,44 +182,45 @@ public class AppleTrackService {
           // Apple KR 제목이 한국어이고 현재 Track 제목이 비한국어이면 업데이트
           // (Through the Night → 밤편지 등) — 이후 Melon/Genie 검색도 한국어로 진행됨
           updateToKoreanTitle(track, byIsrc.getTitle());
-          return byIsrc;
+          return preferKoreanStorefront(byIsrc);
         }
       }
 
       // 2. ISRC 없거나 조회 실패 시 title+artist 검색 (유사도 검사 포함)
-      return searchAppleByTitleArtist(track, platform);
+      return preferKoreanStorefront(searchAppleByTitleArtist(track, platform));
 
     } catch (Exception e) {
       throw new RuntimeException("Apple search failed: " + e.getMessage(), e);
     }
   }
 
-  /** Spotify 등 글로벌 카탈로그 검색에 사용할 영문 곡명을 iTunes US에서 찾는다. */
-  public String findGlobalTitle(Track track) {
-    if (track.getTitle() == null || track.getArtist() == null) return null;
-
+  public PlatformTrack preferKoreanStorefront(PlatformTrack match) {
+    if (match == null || "kr".equals(storefront(match.getUrl()))) return match;
     try {
-      String mainArtist = track.getArtist().split("[,&]")[0].trim();
-      String query = URLEncoder.encode(track.getTitle() + " " + mainArtist, StandardCharsets.UTF_8)
-          .replace("+", "%20");
-      Map response = getAppleResponseAsMap(
-          "https://itunes.apple.com/search?term=" + query + "&entity=song&limit=5&country=us",
-          "Failed to parse Apple US search response");
-      List results = (List) response.get("results");
-      if (results == null) return null;
-
-      for (Object obj : results) {
-        Map item = (Map) obj;
-        String title = (String) item.get("trackName");
-        String artist = (String) item.get("artistName");
-        if (title != null && isSimilar(mainArtist, artist)) {
-          return title;
-        }
+      String id = extractTrackId(match.getUrl());
+      Map response = getAppleResponseAsMap("https://itunes.apple.com/lookup?id=" + id
+          + "&entity=song&country=kr", "Failed to check Korean storefront");
+      if (!(response.get("results") instanceof List results)) return match;
+      for (Object result : results) {
+        Map item = (Map) result;
+        String url = (String) item.get("trackViewUrl");
+        if (!id.equals(String.valueOf(item.get("trackId"))) || url == null
+            || !"music.apple.com".equals(java.net.URI.create(url).getHost())
+            || !"kr".equals(storefront(url)) || !id.equals(extractTrackId(url))) continue;
+        // A catalog ID establishes identity across localized titles and artist names.
+        return new PlatformTrack(match.getTrack(), match.getPlatform(), id, cleanAppleUrl(url),
+            (String) item.get("trackName"), (String) item.get("artistName"));
       }
     } catch (Exception e) {
-      log.warn("[Apple] 글로벌 곡명 조회 실패: {}", e.getMessage());
+      log.warn("[Apple] 한국 스토어 확인 실패: {}", e.getMessage());
     }
-    return null;
+    return match;
+  }
+
+  private static String storefront(String url) {
+    var region = java.util.regex.Pattern.compile("^https?://music\\.apple\\.com/([a-z]{2})/")
+        .matcher(url == null ? "" : url);
+    return region.find() ? region.group(1) : "us";
   }
 
   private PlatformTrack searchAppleByIsrc(Track track, Platform platform, String isrc) {
@@ -189,9 +243,10 @@ public class AppleTrackService {
 
     if (trackId == null || url == null) return null;
 
-    // ISRC 결과 제목이 저장된 제목과 전혀 다르면 오매칭으로 간주 → title+artist 검색으로 폴백
-    if (!TrackMatchVerifier.hasMatchingTitleAndArtist(track.getTitle(), track.getArtist(), title, artist)) {
-      log.warn("[Apple] ISRC 결과 제목 불일치 skip: '{}' vs '{}' (ISRC={})", track.getTitle(), title, isrc);
+    Integer durationMs = item.get("trackTimeMillis") instanceof Number duration ? duration.intValue() : null;
+    LocalDate releaseDate = parseReleaseDate((String) item.get("releaseDate"));
+    if (!TrackMatchVerifier.isEvidenceMatch(track, title, artist, durationMs, releaseDate)) {
+      log.warn("[Apple] ISRC 결과 근거 부족 skip: '{}' vs '{}' (ISRC={})", track.getTitle(), title, isrc);
       return null;
     }
 
@@ -207,12 +262,16 @@ public class AppleTrackService {
         if (result != null) return result;
       }
     }
+    for (String cleanTitle : TrackMatchVerifier.names(track.getTitle())) {
+      PlatformTrack result = searchAppleQuery(track, platform, cleanTitle, null);
+      if (result != null) return result;
+    }
     log.warn("[Apple] 매칭 실패 - title: '{}', artist: '{}'", track.getTitle(), track.getArtist());
     return null;
   }
 
   private PlatformTrack searchAppleQuery(Track track, Platform platform, String cleanTitle, String mainArtist) {
-    String query = cleanTitle + " " + mainArtist;
+    String query = mainArtist == null ? cleanTitle : cleanTitle + " " + mainArtist;
     String encoded = URLEncoder.encode(query, StandardCharsets.UTF_8).replace("+", "%20");
     log.info("[Apple] title+artist 검색 시작 - query: '{}', title: '{}', mainArtist: '{}'",
         query, track.getTitle(), mainArtist);
@@ -233,17 +292,12 @@ public class AppleTrackService {
         String resultArtist = (String) item.get("artistName");
         log.info("[Apple] 후보: title='{}' artist='{}'", resultTitle, resultArtist);
 
-        // Compare only explicit title aliases and verified artist identities.
-        if (!isSimilar(track.getTitle(), resultTitle)) {
-          log.info("[Apple] 제목 불일치 skip: '{}' vs '{}'", track.getTitle(), resultTitle);
-          continue;
-        }
-
-        // 아티스트 비교: 양쪽 모두 첫 번째 아티스트만 추출
-        String mainStoredArtist = TrackMatchVerifier.firstArtist(track.getArtist());
-        String mainResultArtist = TrackMatchVerifier.firstArtist(resultArtist);
-        if (!TrackMatchVerifier.hasMatchingArtist(mainStoredArtist, mainResultArtist)) {
-          log.info("[Apple] 아티스트 불일치 skip: '{}' vs '{}'", mainStoredArtist, mainResultArtist);
+        Integer resultDuration = item.get("trackTimeMillis") instanceof Number duration
+            ? duration.intValue() : null;
+        LocalDate resultReleaseDate = parseReleaseDate((String) item.get("releaseDate"));
+        if (!TrackMatchVerifier.isEvidenceMatch(track, resultTitle, resultArtist,
+            resultDuration, resultReleaseDate)) {
+          log.info("[Apple] 근거 부족 skip: '{}' - '{}'", resultTitle, resultArtist);
           continue;
         }
 
@@ -260,8 +314,8 @@ public class AppleTrackService {
     return null;
   }
 
-  private boolean isSimilar(String a, String b) {
-    return TrackMatchVerifier.isSimilar(a, b);
+  private LocalDate parseReleaseDate(String value) {
+    return value != null && value.length() >= 10 ? LocalDate.parse(value.substring(0, 10)) : null;
   }
 
   /** Track 제목이 비한국어이고 Apple KR 제목이 한국어이면 Track 제목 업데이트 */
@@ -274,30 +328,6 @@ public class AppleTrackService {
       track.setTitle(appleTitle);
       trackRepository.save(track);
     }
-  }
-
-  /**
-   * iTunes KR 검색으로 한국어 제목/아티스트 보정 (호출자 트랜잭션 참여).
-   * TrackService.resolveTrack에서 matchAll 전에 호출 — 부모 @Transactional 컨텍스트에서 실행되어
-   * trackRepository.save()가 부모 트랜잭션에 반영됨.
-   */
-  public void enrichKoreanMetadata(Track track) {
-    // 제목·가수만으로 다른 문자 체계의 곡을 동일 곡이라 증명할 수 없으므로, ISRC 매칭에서만 보정한다.
-  }
-
-  private static String normalizeQuery(String s) {
-    if (s == null) return "";
-    return s.replaceAll("(?i)\\s*[\\(\\[]\\s*(feat|ft|prod|with)\\.?[^)\\]]*[\\)\\]]", "")
-            .replaceAll("[‘’ʼ´`]", "'")
-            .replaceAll("\\s+", " ").trim();
-  }
-
-  /** 아이유↔IU처럼 한쪽은 라틴, 다른쪽은 한글/CJK인 경우 true (동일 아티스트 가능성) */
-  private boolean isDifferentScript(String a, String b) {
-    if (a == null || b == null) return false;
-    boolean aLatin = a.matches("[\\x00-\\x7F\\s]+");
-    boolean bLatin = b.matches("[\\x00-\\x7F\\s]+");
-    return aLatin != bLatin;
   }
 
   private String cleanAppleUrl(String url) {

@@ -46,6 +46,14 @@ public class TrackMatchingService {
         for (Platform platform : platforms) {
             var existing = platformTrackRepository.findByTrackAndPlatform(track, platform);
             if (existing.isPresent() && isSourcePlatform(track, platform)) {
+                if ("apple".equals(platform.getSlug())) {
+                    PlatformTrack preferred = appleTrackService.preferKoreanStorefront(existing.get());
+                    if (preferred != existing.get()) {
+                        platformTrackRepository.delete(existing.get());
+                        platformTrackRepository.flush();
+                        platformTrackRepository.save(preferred);
+                    }
+                }
                 continue;
             }
             existing.ifPresent(platformTrackRepository::delete);
@@ -81,44 +89,17 @@ public class TrackMatchingService {
     }
 
     private PlatformTrack matchToPlatform(Track track, Platform platform) {
-        String sourceUrl = track.getSourceUrl();
+        if (isSourcePlatform(track, platform)) {
+            PlatformTrack source = new PlatformTrack(track, platform, null, track.getSourceUrl(), track.getTitle(), track.getArtist());
+            return "apple".equals(platform.getSlug()) ? appleTrackService.preferKoreanStorefront(source) : source;
+        }
         return switch (platform.getSlug()) {
-            case "spotify" -> {
-                if (sourceUrl != null && sourceUrl.contains("spotify.com")) {
-                    yield new PlatformTrack(track, platform, null, sourceUrl, track.getTitle(), track.getArtist());
-                }
-                yield spotifyTrackService.searchTrack(track, platform);
-            }
-            case "ytmusic" -> {
-                if (sourceUrl != null && (sourceUrl.contains("youtube.com") || sourceUrl.contains("youtu.be"))) {
-                    yield new PlatformTrack(track, platform, null, sourceUrl, track.getTitle(), track.getArtist());
-                }
-                yield youtubeTrackService.searchTrack(track, platform);
-            }
-            case "apple" -> {
-                if (sourceUrl != null && sourceUrl.contains("music.apple.com")) {
-                    yield new PlatformTrack(track, platform, null, sourceUrl, track.getTitle(), track.getArtist());
-                }
-                yield appleTrackService.searchTrack(track, platform);
-            }
-            case "melon"  -> {
-                if (sourceUrl != null && sourceUrl.contains("melon.com")) {
-                    yield new PlatformTrack(track, platform, null, sourceUrl, track.getTitle(), track.getArtist());
-                }
-                yield melonTrackService.searchTrack(track, platform);
-            }
-            case "flo"    -> {
-                if (sourceUrl != null && sourceUrl.contains("music-flo.com")) {
-                    yield new PlatformTrack(track, platform, null, sourceUrl, track.getTitle(), track.getArtist());
-                }
-                yield floTrackService.searchTrack(track, platform);
-            }
-            case "genie"  -> {
-                if (sourceUrl != null && sourceUrl.contains("genie.co.kr")) {
-                    yield new PlatformTrack(track, platform, null, sourceUrl, track.getTitle(), track.getArtist());
-                }
-                yield genieTrackService.searchTrack(track, platform);
-            }
+            case "spotify" -> spotifyTrackService.searchTrack(track, platform);
+            case "ytmusic" -> youtubeTrackService.searchTrack(track, platform);
+            case "apple" -> appleTrackService.searchTrack(track, platform);
+            case "melon" -> melonTrackService.searchTrack(track, platform);
+            case "flo" -> floTrackService.searchTrack(track, platform);
+            case "genie" -> genieTrackService.searchTrack(track, platform);
             default -> null;
         };
     }

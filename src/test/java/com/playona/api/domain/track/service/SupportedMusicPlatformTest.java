@@ -49,13 +49,21 @@ class SupportedMusicPlatformTest {
 
   @Test
   void extractsTheFirstDirectSongResultFromKoreanPlatformSearchPages() {
-    assertEquals("30314784", MelonTrackService.extractFirstSearchSongId(
+    assertEquals(java.util.List.of("30314784"), MelonTrackService.extractSearchSongIds(
         "<button data-song-no=\"30314784\">좋아요</button>"));
-    assertEquals("30314784", MelonTrackService.extractFirstSearchSongId(
+    assertEquals(java.util.List.of("30314784"), MelonTrackService.extractSearchSongIds(
         "<button data-song-no='30314784'>좋아요</button>"));
-    assertEquals("87034188", GenieTrackService.extractFirstSearchSongId(
+    assertEquals(java.util.List.of("87034188"), GenieTrackService.extractSearchSongIds(
         "<a onclick=\"fnPlaySong('87034188','1'); return false;\">밤편지</a>"));
-    assertEquals("87034188", GenieTrackService.extractFirstSearchSongId(
+    assertEquals(java.util.List.of("87034188"), GenieTrackService.extractSearchSongIds(
         "<a onclick=\"fnPlaySong('87034188;','1');return false;\">듣기</a>"));
+  }
+
+  @Test
+  void keepsSeveralDistinctKoreanSearchCandidatesForVerification() {
+    assertEquals(java.util.List.of("1", "2"), MelonTrackService.extractSearchSongIds(
+        "<button data-song-no=\"1\"><button data-song-no=\"2\"><button data-song-no=\"1\">"));
+    assertEquals(java.util.List.of("1", "2"), GenieTrackService.extractSearchSongIds(
+        "fnPlaySong('1','1') fnPlaySong('2;','1') fnPlaySong('1','1')"));
   }
 }

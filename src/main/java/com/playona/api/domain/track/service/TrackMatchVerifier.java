@@ -1,9 +1,13 @@
 package com.playona.api.domain.track.service;
 
 import java.text.Normalizer;
+import java.time.LocalDate;
 import java.util.List;
+import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.regex.Pattern;
+
+import com.playona.api.domain.track.entity.Track;
 
 final class TrackMatchVerifier {
 
@@ -13,16 +17,40 @@ final class TrackMatchVerifier {
 
   private TrackMatchVerifier() {}
 
-  // Verified artist identity: https://linktr.ee/WhysYoung (윤지영 / Whys Young).
-  // Keep curated aliases artist-only; never infer identity from a similar song title.
-  private static final List<String> WHYS_YOUNG_NAMES = List.of("Whys Young", "윤지영", "Yoon Jiyoung");
+  static List<String> searchTitles(String title) {
+    var titles = new LinkedHashSet<String>();
+    for (String name : names(title)) {
+      titles.add(name);
+      String withoutHyphens = name.replaceAll("[-‐‑‒–—]", "").replaceAll("\\s+", " ").trim();
+      if (!withoutHyphens.isBlank()) titles.add(withoutHyphens);
+    }
+    return List.copyOf(titles);
+  }
+
+  static String explicitAlias(String original, String translated) {
+    if (translated == null || translated.isBlank()) return original;
+    String combined = original + " (" + translated + ")";
+    return names(combined).size() == 2 ? combined : original;
+  }
+
+  static List<String> koreanSearchQueries(Track track) {
+    String artist = normalizeQuery(artistNames(track.getArtist()).get(0));
+    var queries = new LinkedHashSet<String>();
+    for (String title : searchTitles(track.getTitle())) {
+      String normalized = normalizeQuery(title);
+      queries.add(artist.isBlank() ? normalized : normalized + " " + artist);
+      queries.add(normalized);
+    }
+    return List.copyOf(queries);
+  }
+
+  private static String normalizeQuery(String value) {
+    return value.replaceAll("(?i)\\s*[\\(\\[]\\s*(feat|ft|prod|with)\\.?[^)\\]]*[\\)\\]]", "")
+        .replaceAll("[‘’ʼ´`]", "'").replaceAll("\\s+", " ").trim();
+  }
 
   static List<String> artistNames(String artist) {
-    List<String> explicit = names(firstArtist(artist));
-    if (explicit.stream().anyMatch(name -> WHYS_YOUNG_NAMES.stream().anyMatch(alias -> isSimilar(name, alias)))) {
-      return WHYS_YOUNG_NAMES;
-    }
-    return explicit;
+    return names(firstArtist(artist));
   }
 
   static boolean hasMatchingArtist(String left, String right) {
@@ -30,10 +58,29 @@ final class TrackMatchVerifier {
         .anyMatch(name -> artistNames(right).stream().anyMatch(candidate -> isSimilar(name, candidate)));
   }
 
-  static boolean isConfidentMatch(String title, String artist, Integer durationMs,
-      String candidateTitle, String candidateArtist, Integer candidateDurationMs) {
-    return hasMatchingTitleAndArtist(title, artist, candidateTitle, candidateArtist)
-        && hasCompatibleDuration(durationMs, candidateDurationMs);
+  static boolean isEvidenceMatch(Track source, String candidateTitle, String candidateArtist,
+      Integer candidateDurationMs, LocalDate candidateReleaseDate) {
+    boolean titleMatches = isSimilar(source.getTitle(), candidateTitle);
+    boolean artistMatches = hasMatchingArtist(source.getArtist(), candidateArtist);
+    if (titleMatches && artistMatches) {
+      return hasCompatibleDuration(source.getDurationMs(), candidateDurationMs, 30_000L);
+    }
+    if (!(titleMatches || artistMatches)) return false;
+    if (!titleMatches) {
+      String sourceTitle = names(source.getTitle()).get(0);
+      String targetTitle = names(candidateTitle).get(0);
+      if (VERSION.matcher(sourceTitle).find() || VERSION.matcher(targetTitle).find()) return false;
+      // A different title in the same script is not evidence of a translation.
+      if (!((isLatin(sourceTitle) && isAsian(targetTitle))
+          || (isAsian(sourceTitle) && isLatin(targetTitle)))) return false;
+    }
+    // ponytail: metadata corroboration is heuristic; use recording IDs when same-date tracks collide.
+    // Missing metadata cannot corroborate a title or artist discrepancy.
+    return source.getDurationMs() != null && source.getDurationMs() > 0
+        && candidateDurationMs != null && candidateDurationMs > 0
+        && (titleMatches || Math.abs(source.getDurationMs().longValue() - candidateDurationMs) <= 2_000L)
+        && hasCompatibleDuration(source.getDurationMs(), candidateDurationMs, 15_000L)
+        && hasMatchingReleaseDate(source.getReleaseDate(), candidateReleaseDate);
   }
 
   static boolean hasMatchingTitleAndArtist(String title, String artist,
@@ -71,9 +118,13 @@ final class TrackMatchVerifier {
     return value.matches(".*[가-힣\\u3040-\\u30ff\\u4e00-\\u9fff].*") && !value.matches(".*[a-zA-Z].*");
   }
 
-  private static boolean hasCompatibleDuration(Integer durationMs, Integer candidateDurationMs) {
+  private static boolean hasCompatibleDuration(Integer durationMs, Integer candidateDurationMs, long toleranceMs) {
     return durationMs == null || candidateDurationMs == null
-        || Math.abs(durationMs.longValue() - candidateDurationMs) <= 15_000L;
+        || Math.abs(durationMs.longValue() - candidateDurationMs) <= toleranceMs;
+  }
+
+  private static boolean hasMatchingReleaseDate(LocalDate releaseDate, LocalDate candidateReleaseDate) {
+    return releaseDate != null && releaseDate.equals(candidateReleaseDate);
   }
 
   static String firstArtist(String artist) {

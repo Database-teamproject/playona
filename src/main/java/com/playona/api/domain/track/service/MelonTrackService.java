@@ -1,5 +1,7 @@
 package com.playona.api.domain.track.service;
 
+import static org.springframework.web.util.HtmlUtils.htmlUnescape;
+
 import com.playona.api.domain.platform.entity.Platform;
 import com.playona.api.domain.platform.entity.PlatformTrack;
 import com.playona.api.domain.track.entity.Track;
@@ -13,6 +15,8 @@ import org.springframework.web.reactive.function.client.WebClient;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -63,8 +67,14 @@ public class MelonTrackService {
     public PlatformTrack searchTrack(Track track, Platform platform) {
         if (track.getTitle() == null) return null;
 
-        String mainArtist = TrackMatchVerifier.names(TrackMatchVerifier.firstArtist(track.getArtist())).get(0);
-        String rawQuery = normalizeQuery(TrackMatchVerifier.names(track.getTitle()).get(0)) + (mainArtist.isBlank() ? "" : " " + normalizeQuery(mainArtist));
+        for (String query : TrackMatchVerifier.koreanSearchQueries(track)) {
+            PlatformTrack result = searchQuery(track, platform, query);
+            if (result != null) return result;
+        }
+        return null;
+    }
+
+    private PlatformTrack searchQuery(Track track, Platform platform, String rawQuery) {
         String query = URLEncoder.encode(rawQuery, StandardCharsets.UTF_8).replace("+", "%20");
 
         try {
@@ -75,18 +85,23 @@ public class MelonTrackService {
                     .retrieve()
                     .bodyToMono(String.class)
                     .block();
-            String songId = extractFirstSearchSongId(html);
-            if (songId != null) {
+            for (String songId : extractSearchSongIds(html)) {
                 String detailUrl = "https://www.melon.com/song/detail.htm?songId=" + songId;
-                String detailHtml = webClient.get().uri(java.net.URI.create(detailUrl))
-                        .header("User-Agent", "Mozilla/5.0")
-                        .retrieve().bodyToMono(String.class).block();
-                if (detailHtml == null) return null;
+                String detailHtml;
+                try {
+                    detailHtml = webClient.get().uri(java.net.URI.create(detailUrl))
+                            .header("User-Agent", "Mozilla/5.0")
+                            .retrieve().bodyToMono(String.class).block();
+                } catch (Exception e) {
+                    log.warn("[Melon] 후보 상세 조회 실패: songId={}", songId);
+                    continue;
+                }
+                if (detailHtml == null) continue;
                 Matcher metadataMatcher = OG_TITLE.matcher(detailHtml);
-                if (!metadataMatcher.find()) return null;
+                if (!metadataMatcher.find()) continue;
                 String[] metadata = extractTitleAndArtist(metadataMatcher.group(1));
                 if (!TrackMatchVerifier.hasMatchingTitleAndArtist(
-                        track.getTitle(), track.getArtist(), metadata[0], metadata[1])) return null;
+                        track.getTitle(), track.getArtist(), metadata[0], metadata[1])) continue;
                 return new PlatformTrack(track, platform, songId, detailUrl, metadata[0], metadata[1]);
             }
         } catch (Exception e) {
@@ -98,29 +113,12 @@ public class MelonTrackService {
 
 
     private static String[] extractTitleAndArtist(String value) {
-        String ogTitle = unescapeHtml(value);
+        String ogTitle = htmlUnescape(value);
         // "제목 - 아티스트" 형식에서 마지막 " - " 기준으로 분리
         int sep = ogTitle.lastIndexOf(" - ");
         String title = sep > 0 ? ogTitle.substring(0, sep).trim() : ogTitle.trim();
         String artist = sep > 0 ? ogTitle.substring(sep + 3).trim() : "";
         return new String[]{title, artist};
-    }
-
-    private static String normalizeQuery(String s) {
-        if (s == null) return "";
-        return s.replaceAll("(?i)\\s*[\\(\\[]\\s*(feat|ft|prod|with)\\.?[^)\\]]*[\\)\\]]", "")
-                .replaceAll("[\u2018\u2019\u02bc\u00b4`]", "'")
-                .replaceAll("\\s+", " ").trim();
-    }
-
-    private static String unescapeHtml(String s) {
-        if (s == null) return null;
-        return s.replace("&amp;", "&")
-                .replace("&lt;", "<")
-                .replace("&gt;", ">")
-                .replace("&quot;", "\"")
-                .replace("&#39;", "'")
-                .replace("&apos;", "'");
     }
 
     static String extractSongId(String url) {
@@ -133,9 +131,11 @@ public class MelonTrackService {
         throw new IllegalArgumentException("Could not extract Melon songId from URL: " + url);
     }
 
-    static String extractFirstSearchSongId(String html) {
-        if (html == null) return null;
+    static List<String> extractSearchSongIds(String html) {
+        if (html == null) return List.of();
         Matcher matcher = Pattern.compile("data-song-no=[\"'](\\d+)[\"']").matcher(html);
-        return matcher.find() ? matcher.group(1) : null;
+        LinkedHashSet<String> ids = new LinkedHashSet<>();
+        while (matcher.find() && ids.size() < 5) ids.add(matcher.group(1));
+        return List.copyOf(ids);
     }
 }

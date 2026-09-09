@@ -63,7 +63,6 @@ public class SpotifyTrackService {
     }
 
     private final TrackRepository trackRepository;
-    private final AppleTrackService appleTrackService;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Track getTrackFromUrl(String url) {
@@ -90,8 +89,9 @@ public class SpotifyTrackService {
 
             String sourceUrl = "https://open.spotify.com/track/" + trackId;
 
-            if (isrc != null && trackRepository.existsByIsrc(isrc)) {
-                return trackRepository.findByIsrc(isrc).orElseThrow();
+            if (isrc != null) {
+                var existing = trackRepository.findFirstByIsrcOrderByIdAsc(isrc);
+                if (existing.isPresent()) return existing.get();
             }
 
             Track existingTrack = trackRepository.findFirstBySourceUrl(sourceUrl).orElse(null);
@@ -149,15 +149,20 @@ public class SpotifyTrackService {
                 query = "track:" + track.getTitle() + " artist:" + cleanArtist;
             }
 
-            var item = findVerifiedMatch(track, query, track.getTitle());
+            var item = findVerifiedMatch(track, query);
             if (item == null && track.getIsrc() == null) {
                 for (String artist : TrackMatchVerifier.artistNames(track.getArtist())) {
                   for (String title : TrackMatchVerifier.names(track.getTitle())) {
-                    item = findVerifiedMatch(track,
-                            "track:" + title + " artist:" + artist, track.getTitle());
+                    item = findVerifiedMatch(track, "track:" + title + " artist:" + artist);
                     if (item != null) break;
                   }
                   if (item != null) break;
+                }
+                if (item == null) {
+                    for (String title : TrackMatchVerifier.names(track.getTitle())) {
+                        item = findVerifiedMatch(track, "track:" + title);
+                        if (item != null) break;
+                    }
                 }
             }
             if (item == null) return null;
@@ -190,16 +195,15 @@ public class SpotifyTrackService {
     }
 
     private se.michaelthelin.spotify.model_objects.specification.Track findVerifiedMatch(
-            Track track, String query, String matchTitle) throws Exception {
+            Track track, String query) throws Exception {
         var results = authorizedApi().searchTracks(query).limit(5).build().execute();
         return Arrays.stream(results.getItems())
-                .filter(candidate -> isVerifiedMatch(track, candidate, matchTitle))
+                .filter(candidate -> isVerifiedMatch(track, candidate))
                 .findFirst()
                 .orElse(null);
     }
 
-    private boolean isVerifiedMatch(Track track, se.michaelthelin.spotify.model_objects.specification.Track candidate,
-            String matchTitle) {
+    private boolean isVerifiedMatch(Track track, se.michaelthelin.spotify.model_objects.specification.Track candidate) {
         if (track.getIsrc() != null && candidate.getExternalIds() != null) {
             String candidateIsrc = candidate.getExternalIds().getExternalIds().get("isrc");
             return track.getIsrc().equals(candidateIsrc);
@@ -207,29 +211,13 @@ public class SpotifyTrackService {
         String candidateArtist = Arrays.stream(candidate.getArtists())
                 .map(ArtistSimplified::getName)
                 .collect(Collectors.joining(", "));
-        return TrackMatchVerifier.isConfidentMatch(
-                matchTitle, track.getArtist(), track.getDurationMs(),
-                candidate.getName(), candidateArtist, candidate.getDurationMs());
-    }
-
-    public record CanonicalMeta(String title, String artist, String isrc) {}
-
-    public CanonicalMeta lookupCanonical(String title, String artist) {
-        try {
-            String cleanArtist = cleanArtistForSearch(artist);
-            String query = "track:" + title + " artist:" + cleanArtist;
-            var results = authorizedApi().searchTracks(query).limit(1).build().execute();
-            if (results.getItems().length == 0) return null;
-            var item = results.getItems()[0];
-            String isrc = (item.getExternalIds() != null)
-                    ? item.getExternalIds().getExternalIds().get("isrc") : null;
-            String canonicalArtist = Arrays.stream(item.getArtists())
-                    .map(ArtistSimplified::getName)
-                    .collect(Collectors.joining(", "));
-            return new CanonicalMeta(item.getName(), canonicalArtist, isrc);
-        } catch (Exception e) {
-            return null;
+        LocalDate releaseDate = null;
+        if (candidate.getAlbum() != null && candidate.getAlbum().getReleaseDate() != null
+            && candidate.getAlbum().getReleaseDate().length() >= 10) {
+            releaseDate = LocalDate.parse(candidate.getAlbum().getReleaseDate().substring(0, 10));
         }
+        return TrackMatchVerifier.isEvidenceMatch(track, candidate.getName(), candidateArtist,
+                candidate.getDurationMs(), releaseDate);
     }
 
     // "엠씨더맥스 (M.C the MAX)" → "엠씨더맥스", "BTS (방탄소년단)" → "BTS"
@@ -238,9 +226,4 @@ public class SpotifyTrackService {
         return artist.replaceAll("\\s*[\\(\\[].*?[\\)\\]]\\s*", " ").replaceAll("\\s+", " ").trim();
     }
 
-    private String cleanTitleForSearch(String title) {
-        if (title == null) return "";
-        return title.replaceAll("(?i)\\s*[\\(\\[]\\s*(feat|ft|featuring)\\.?[^)\\]]*[\\)\\]]", "")
-                .replaceAll("\\s+", " ").trim();
-    }
 }

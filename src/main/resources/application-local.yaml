@@ -1,0 +1,32 @@
+# Activate explicitly with --spring.profiles.active=local.
+spring:
+  config:
+    import: optional:file:.env[.properties],optional:file:KEY.env[.properties]
+  datasource:
+    url: jdbc:postgresql://127.0.0.1:15432/playona_local
+    username: postgres
+    password: local-only-password
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: local-unused-google
+            client-secret: local-unused-google
+            redirect-uri: http://localhost:8080/login/oauth2/code/google
+          kakao:
+            client-id: local-unused-kakao
+            client-secret: local-unused-kakao
+            redirect-uri: http://localhost:8080/login/oauth2/code/kakao
+server:
+  address: 127.0.0.1
+  port: 8080
+app:
+  base-url: http://localhost:3000
+oauth2:
+  redirect-url: http://localhost:3000/auth/callback
+# Local matching tests do not use S3 or production credentials.
+aws:
+  credentials:
+    access-key: local-unused
+    secret-key: local-unused

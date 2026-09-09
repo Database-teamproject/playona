@@ -1,0 +1,19 @@
+name: playona-local
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: playona_local
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: local-only-password
+    ports:
+      - "127.0.0.1:15432:5432"
+    volumes:
+      - local-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d playona_local"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+volumes:
+  local-postgres:

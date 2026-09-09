@@ -7,14 +7,9 @@ import com.playona.api.domain.platform.entity.PlatformTrack;
 import com.playona.api.domain.platform.repository.PlatformTrackRepository;
 import com.playona.api.domain.track.entity.Track;
 import com.playona.api.global.exception.NotFoundException;
-import com.playona.api.domain.track.service.AppleTrackService;
-import com.playona.api.domain.track.service.FloTrackService;
-import com.playona.api.domain.track.service.GenieTrackService;
-import com.playona.api.domain.track.service.MelonTrackService;
-import com.playona.api.domain.track.service.SpotifyTrackService;
 import com.playona.api.domain.track.service.TrackMatchingService;
+import com.playona.api.domain.track.service.TrackService;
 import com.playona.api.domain.track.service.YoutubeTrackService;
-import com.playona.api.domain.track.service.SupportedMusicPlatform;
 import com.playona.api.domain.user.entity.User;
 import com.playona.api.domain.user.entity.UserPlatformPreference;
 import com.playona.api.domain.user.repository.UserPlatformPreferenceRepository;
@@ -39,12 +34,8 @@ public class LinkService {
     private String baseUrl;
 
     private final UserRepository userRepository;
-    private final AppleTrackService appleTrackService;
-    private final MelonTrackService melonTrackService;
-    private final FloTrackService floTrackService;
-    private final GenieTrackService genieTrackService;
+    private final TrackService trackService;
     private final YoutubeTrackService youtubeTrackService;
-    private final SpotifyTrackService spotifyTrackService;
     private final SharedLinkRepository sharedLinkRepository;
     private final TrackMatchingService trackMatchingService;
     private final PlatformTrackRepository platformTrackRepository;
@@ -52,7 +43,7 @@ public class LinkService {
 
     @Transactional
     public LinkResponse createLink(String url) {
-        Track track = findOrCreateTrack(url);
+        Track track = trackService.findOrCreateTrack(url);
 
         User user = null;
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -64,29 +55,12 @@ public class LinkService {
             ? sharedLinkRepository.findByTrackAndUser(track, user)
             : sharedLinkRepository.findFirstByTrackAndUserIsNull(track);
 
-        if (existing.isPresent()) {
-            trackMatchingService.matchAll(track);
-            return new LinkResponse(existing.get(), baseUrl, platformTrackRepository.findByTrack(existing.get().getTrack()));
+        SharedLink sharedLink = existing.orElse(null);
+        if (sharedLink == null) {
+            sharedLink = sharedLinkRepository.save(new SharedLink(generateShortCode(), track, user));
         }
-
-        String shortCode = generateShortCode();
-        SharedLink sharedLink = new SharedLink(shortCode, track, user);
-        sharedLinkRepository.save(sharedLink);
-        appleTrackService.enrichKoreanMetadata(track);
         trackMatchingService.matchAll(track);
-
-        return new LinkResponse(sharedLink, baseUrl, platformTrackRepository.findByTrack(sharedLink.getTrack()));
-    }
-
-    private Track findOrCreateTrack(String url) {
-        return switch (SupportedMusicPlatform.fromUrl(url)) {
-            case SPOTIFY -> spotifyTrackService.getTrackFromUrl(url);
-            case YOUTUBE -> youtubeTrackService.getTrackFromUrl(url);
-            case APPLE_MUSIC -> appleTrackService.getTrackFromUrl(url);
-            case MELON -> melonTrackService.getTrackFromUrl(url);
-            case FLO -> floTrackService.getTrackFromUrl(url);
-            case GENIE -> genieTrackService.getTrackFromUrl(url);
-        };
+        return new LinkResponse(sharedLink, baseUrl, platformTrackRepository.findByTrack(track));
     }
 
     private String generateShortCode() {
@@ -111,16 +85,14 @@ public class LinkService {
 
     @Transactional
     public void incrementClickCount(String shortCode) {
-        SharedLink sharedLink = sharedLinkRepository.findByShortCode(shortCode)
-            .orElseThrow(() -> new NotFoundException("링크를 찾을 수 없습니다: " + shortCode));
+        SharedLink sharedLink = getLink(shortCode);
         sharedLink.incrementClickCount();
         sharedLinkRepository.save(sharedLink);
     }
 
     @Transactional
     public String getRedirectUrl(String shortCode, String userUuid) {
-        SharedLink sharedLink = sharedLinkRepository.findByShortCode(shortCode)
-            .orElseThrow(() -> new NotFoundException("링크를 찾을 수 없습니다: " + shortCode));
+        SharedLink sharedLink = getLink(shortCode);
         sharedLink.incrementClickCount();
         sharedLinkRepository.save(sharedLink);
 
@@ -166,8 +138,7 @@ public class LinkService {
 
     @Transactional(readOnly = true)
     public List<Map<String, String>> getPlatformUrls(String shortCode) {
-        SharedLink sharedLink = sharedLinkRepository.findByShortCode(shortCode)
-            .orElseThrow(() -> new NotFoundException("링크를 찾을 수 없습니다: " + shortCode));
+        SharedLink sharedLink = getLink(shortCode);
 
         return platformTrackRepository.findByTrack(sharedLink.getTrack()).stream()
             .filter(pt -> !pt.isSearchFallback())

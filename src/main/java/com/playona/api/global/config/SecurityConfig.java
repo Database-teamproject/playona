@@ -51,6 +51,8 @@ public class SecurityConfig {
             // 트랙 단건 조회는 공개, resolve(POST)는 인증 필요
             .requestMatchers(HttpMethod.GET, "/api/tracks/{trackId}").permitAll()
             // Swagger / API 문서
+            // The controller is registered only with the local profile.
+            .requestMatchers(HttpMethod.GET, "/local").permitAll()
             .requestMatchers("/swagger-ui/**", "/swagger-ui.html",
                 "/v3/api-docs/**", "/api-docs/**", "/openapi.yaml").permitAll()
             // 에러 페이지

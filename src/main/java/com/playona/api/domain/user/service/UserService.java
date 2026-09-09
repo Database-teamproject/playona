@@ -39,9 +39,7 @@ public class UserService {
         String oldUrl = user.getProfileImageUrl();
         String newUrl = s3Service.uploadProfileImage(userUuid, file);
         user.setProfileImageUrl(newUrl);
-        if (oldUrl != null && oldUrl.contains(".amazonaws.com/")) {
-            s3Service.deleteByUrl(oldUrl);
-        }
+        s3Service.deleteByUrl(oldUrl);
         return toUserResponse(userRepository.save(user));
     }
 
@@ -62,10 +60,7 @@ public class UserService {
     }
 
     public List<PlatformPreferenceResponse> updateMyPlatformsByUuid(String userUuid, List<PlatformPreferenceRequest> requests) {
-        return updatePlatforms(getUserByUuidOrThrow(userUuid), requests);
-    }
-
-    private List<PlatformPreferenceResponse> updatePlatforms(User user, List<PlatformPreferenceRequest> requests) {
+        User user = getUserByUuidOrThrow(userUuid);
         if (requests == null || requests.isEmpty()) {
             throw new IllegalArgumentException("Platform preference list cannot be empty");
         }

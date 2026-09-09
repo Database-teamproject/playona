@@ -25,20 +25,7 @@ public class TrackService {
 
     @Transactional
     public TrackResolveResponse resolveTrack(String url) {
-        Track track;
-
-        track = switch (SupportedMusicPlatform.fromUrl(url)) {
-            case YOUTUBE -> youtubeTrackService.getTrackFromUrl(url);
-            case SPOTIFY -> spotifyTrackService.getTrackFromUrl(url);
-            case APPLE_MUSIC -> appleTrackService.getTrackFromUrl(url);
-            case MELON -> melonTrackService.getTrackFromUrl(url);
-            case FLO -> floTrackService.getTrackFromUrl(url);
-            case GENIE -> genieTrackService.getTrackFromUrl(url);
-        };
-
-        // 비한국어 제목 트랙(YouTube/Spotify 영어 제목)을 iTunes KR로 한국어 보정
-        // matchAll 전에 실행해야 Melon/Genie/FLO 검색이 한국어로 진행됨
-        appleTrackService.enrichKoreanMetadata(track);
+        Track track = findOrCreateTrack(url);
 
         trackMatchingService.matchAll(track);
 
@@ -53,6 +40,17 @@ public class TrackService {
                 .thumbnailUrl(track.getThumbnailUrl())
                 .sourceUrl(track.getSourceUrl())
                 .build();
+    }
+
+    public Track findOrCreateTrack(String url) {
+        return switch (SupportedMusicPlatform.fromUrl(url)) {
+            case YOUTUBE -> youtubeTrackService.getTrackFromUrl(url);
+            case SPOTIFY -> spotifyTrackService.getTrackFromUrl(url);
+            case APPLE_MUSIC -> appleTrackService.getTrackFromUrl(url);
+            case MELON -> melonTrackService.getTrackFromUrl(url);
+            case FLO -> floTrackService.getTrackFromUrl(url);
+            case GENIE -> genieTrackService.getTrackFromUrl(url);
+        };
     }
 
     public TrackDetailResponse getTrackDetail(Long trackId) {

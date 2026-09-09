@@ -10,6 +10,9 @@ import com.playona.api.domain.platform.entity.PlatformTrack;
 import com.playona.api.domain.track.entity.Track;
 import com.playona.api.domain.track.repository.TrackRepository;
 import java.util.List;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.HttpStatus;
@@ -19,6 +22,61 @@ import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
 class KoreanPlatformMatchingTest {
+
+    @ParameterizedTest
+    @ValueSource(strings = {"genie", "melon"})
+    void skipsFailedAndWrongCandidatesBeforeReturningVerifiedSong(String slug) {
+        TrackRepository repository = mock(TrackRepository.class);
+        Object service = slug.equals("genie") ? new GenieTrackService(repository) : new MelonTrackService(repository);
+        WebClient client = WebClient.builder().exchangeFunction(request -> {
+            String query = request.url().getQuery();
+            boolean search = request.url().getPath().contains("/search");
+            if (!search && query.endsWith("111")) {
+                return Mono.just(ClientResponse.create(HttpStatus.NOT_FOUND).build());
+            }
+            String artist = query.endsWith("222") ? "Other Artist" : "Original Artist";
+            String body = search
+                    ? results(slug, "", "").replace("123", "111")
+                        + results(slug, "", "").replace("123", "222")
+                        + results(slug, "", "").replace("123", "333")
+                    : "<meta property=\"og:title\" content=\"Morning"
+                        + (slug.equals("genie") ? " / " : " - ") + artist
+                        + (slug.equals("genie") ? " - genie" : "") + "\">";
+            return Mono.just(ClientResponse.create(HttpStatus.OK).header("Content-Type", "text/html")
+                    .body(body).build());
+        }).build();
+        ReflectionTestUtils.setField(service, "webClient", client);
+        Track source = new Track("Morning", "Original Artist", null, "https://example.com/track");
+        PlatformTrack result = slug.equals("genie")
+                ? ((GenieTrackService) service).searchTrack(source, platform(slug))
+                : ((MelonTrackService) service).searchTrack(source, platform(slug));
+        assertNotNull(result);
+        assertEquals("333", result.getPlatformTrackId());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"flo", "genie", "melon"})
+    void retriesHyphenatedTitleAndDisplaysOnlyVerifiedResults(String slug) {
+        Track source = new Track("soFt-dRink", "Mrs. GREEN APPLE", null, "https://music.youtube.com/watch?v=vt9YVvYFitg");
+        for (String artist : List.of("Mrs. GREEN APPLE", "Other Artist")) {
+            List<String> queries = new ArrayList<>();
+            var match = search(slug, results(slug, "Softdrink", artist), "Softdrink", artist,
+                    HttpStatus.OK, source, queries);
+            assertTrue(queries.contains("soFt-dRink Mrs. GREEN APPLE"));
+            assertTrue(queries.contains("soFtdRink Mrs. GREEN APPLE"));
+            if (!slug.equals("flo")) assertTrue(queries.contains("soFt-dRink"));
+            if (artist.equals("Other Artist")) {
+                assertNull(match);
+            } else {
+                assertNotNull(match);
+                assertEquals("Softdrink", match.getTitle());
+                var response = new LinkResponse(new SharedLink("local", source), "http://localhost:3000", List.of(match));
+                assertEquals(1, response.getPlatforms().size());
+                assertEquals(match.getUrl(), response.getPlatforms().get(0).get("url"));
+            }
+        }
+        assertEquals("soFt-dRink", source.getTitle());
+    }
 
     @ParameterizedTest
     @ValueSource(strings = {"flo", "genie", "melon"})
@@ -75,6 +133,11 @@ class KoreanPlatformMatchingTest {
     }
 
     private PlatformTrack search(String slug, String searchBody, String title, String artist, HttpStatus status, Track track) {
+        return search(slug, searchBody, title, artist, status, track, null);
+    }
+
+    private PlatformTrack search(String slug, String searchBody, String title, String artist, HttpStatus status, Track track,
+            List<String> queries) {
         TrackRepository repository = mock(TrackRepository.class);
         Object service = switch (slug) {
             case "flo" -> new FloTrackService(repository);
@@ -86,6 +149,13 @@ class KoreanPlatformMatchingTest {
             String body = search ? searchBody : "<meta property=\"og:title\" content=\""
                     + title + (slug.equals("genie") ? " / " : " - ") + artist
                     + (slug.equals("genie") ? " - genie" : "") + "\">";
+            if (search && queries != null) {
+                String query = URLDecoder.decode(request.url().getRawQuery().split("&")[0].split("=", 2)[1], StandardCharsets.UTF_8);
+                queries.add(query);
+                if (query.contains("soFt-dRink")) {
+                    body = slug.equals("flo") ? "{\"code\":\"2000000\",\"data\":{\"list\":[]}}" : "검색 결과 없음";
+                }
+            }
             return Mono.just(ClientResponse.create(status)
                     .header("Content-Type", slug.equals("flo") ? "application/json" : "text/html")
                     .body(body).build());
