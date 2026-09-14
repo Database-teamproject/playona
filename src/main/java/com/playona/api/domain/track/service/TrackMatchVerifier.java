@@ -50,7 +50,18 @@ final class TrackMatchVerifier {
   }
 
   static List<String> artistNames(String artist) {
-    return names(firstArtist(artist));
+    String first = firstArtist(artist);
+    var aliases = names(first);
+    if (aliases.size() > 1) return aliases;
+    // Some official credits place complete names in two scripts side by side.
+    for (int i = 1; i < first.length(); i++) {
+      if (!Character.isWhitespace(first.charAt(i))) continue;
+      String left = first.substring(0, i).trim(), right = first.substring(i).trim();
+      if ((isLatin(left) && isAsian(right)) || (isAsian(left) && isLatin(right))) {
+        return List.of(left, right);
+      }
+    }
+    return aliases;
   }
 
   static boolean hasMatchingArtist(String left, String right) {
@@ -63,7 +74,10 @@ final class TrackMatchVerifier {
     boolean titleMatches = isSimilar(source.getTitle(), candidateTitle);
     boolean artistMatches = hasMatchingArtist(source.getArtist(), candidateArtist);
     if (titleMatches && artistMatches) {
-      return hasCompatibleDuration(source.getDurationMs(), candidateDurationMs, 30_000L);
+      // Reissues can change album dates. An alternate-language title needs corroboration.
+      return (isSimilar(names(source.getTitle()).get(0), names(candidateTitle).get(0))
+          || hasCompatibleReleaseDate(source.getReleaseDate(), candidateReleaseDate))
+          && hasCompatibleDuration(source.getDurationMs(), candidateDurationMs, 30_000L);
     }
     if (!(titleMatches || artistMatches)) return false;
     if (!titleMatches) {
@@ -98,7 +112,10 @@ final class TrackMatchVerifier {
   // Only explicit alternate scripts are aliases; version labels remain part of the title.
   static List<String> names(String value) {
     if (value == null) return List.of("");
-    String cleaned = value.replaceAll("(?i)\\s*[\\(\\[]\\s*(feat|ft|featuring)\\.?[^)\\]]*[\\)\\]]", "").trim();
+    // Only a complete, trailing work credit is removable; recording version labels stay intact.
+    String cleaned = Normalizer.normalize(value, Normalizer.Form.NFKC)
+        .replaceAll("\\s*\\*\\s*(?:애니메이션|영화|드라마)\\s*\\[[^\\[\\]]+\\]\\s*(?:주제가|삽입곡|오프닝(?:\\s*테마)?|엔딩(?:\\s*테마)?)\\s*$", "")
+        .replaceAll("(?i)\\s*[\\(\\[]\\s*(feat|ft|featuring)\\.?[^)\\]]*[\\)\\]]", "").trim();
     var alias = ALIAS.matcher(cleaned);
     if (alias.matches() && !VERSION.matcher(cleaned).find()) {
       String base = alias.group(1).trim();
@@ -125,6 +142,11 @@ final class TrackMatchVerifier {
 
   private static boolean hasMatchingReleaseDate(LocalDate releaseDate, LocalDate candidateReleaseDate) {
     return releaseDate != null && releaseDate.equals(candidateReleaseDate);
+  }
+
+  static boolean hasCompatibleReleaseDate(LocalDate source, LocalDate candidate) {
+    return source == null || candidate == null
+        || Math.abs(java.time.temporal.ChronoUnit.DAYS.between(source, candidate)) <= 1;
   }
 
   static String firstArtist(String artist) {

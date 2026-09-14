@@ -22,6 +22,47 @@ import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
 class KoreanPlatformMatchingTest {
+    @ParameterizedTest
+    @ValueSource(strings = {"genie", "melon"})
+    void retriesInterruptedHtmlReadOnceBeforeTryingAnotherQuery(String slug) {
+        Object service = slug.equals("genie") ? new GenieTrackService(mock(TrackRepository.class))
+                : new MelonTrackService(mock(TrackRepository.class));
+        var requests = new ArrayList<String>();
+        ReflectionTestUtils.setField(service, "webClient", WebClient.builder().exchangeFunction(request -> {
+            requests.add(request.url().toString());
+            if (requests.size() == 1) return Mono.error(new RuntimeException("Connection reset"));
+            String body = request.url().getPath().contains("/search") ? results(slug, "Morning", "Artist")
+                    : "<meta property=\"og:title\" content=\"Morning" + (slug.equals("genie") ? " / Artist - genie" : " - Artist") + "\">";
+            return Mono.just(ClientResponse.create(HttpStatus.OK).header("Content-Type", "text/html").body(body).build());
+        }).build());
+        Track source = new Track("Morning", "Artist", null, "https://example.com/song");
+        PlatformTrack result = slug.equals("genie") ? ((GenieTrackService) service).searchTrack(source, platform(slug))
+                : ((MelonTrackService) service).searchTrack(source, platform(slug));
+        assertNotNull(result);
+        assertEquals(requests.get(0), requests.get(1));
+        assertEquals(3, requests.size());
+    }
+    @org.junit.jupiter.api.Test
+    void retriesFloByTitleWhenCombinedSearchFindsCovers() {
+        var service = new FloTrackService(mock(TrackRepository.class));
+        ReflectionTestUtils.setField(service, "webClient", WebClient.builder().exchangeFunction(request -> {
+            boolean titleOnly = request.url().getQuery().startsWith("keyword=Morning&");
+            return Mono.just(ClientResponse.create(HttpStatus.OK).header("Content-Type", "application/json")
+                    .body(results("flo", "Morning", titleOnly ? "Artist" : "Cover Artist")).build());
+        }).build());
+        Track source = new Track("Morning", "Artist", null, "https://example.com/song");
+        assertEquals("Artist", service.searchTrack(source, platform("flo")).getArtist());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"genie", "melon"})
+    void checksRelevantCandidatesBeyondFirstFive(String slug) {
+        StringBuilder html = new StringBuilder();
+        for (int i = 1; i <= 8; i++) html.append(results(slug, "", "").replace("123", String.valueOf(i)));
+        var ids = slug.equals("genie") ? GenieTrackService.extractSearchSongIds(html.toString())
+                : MelonTrackService.extractSearchSongIds(html.toString());
+        assertTrue(ids.contains("8"));
+    }
 
     @ParameterizedTest
     @ValueSource(strings = {"genie", "melon"})

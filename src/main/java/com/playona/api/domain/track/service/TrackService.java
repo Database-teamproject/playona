@@ -42,8 +42,10 @@ public class TrackService {
                 .build();
     }
 
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
     public Track findOrCreateTrack(String url) {
-        return switch (SupportedMusicPlatform.fromUrl(url)) {
+        var source = SupportedMusicPlatform.fromUrl(url);
+        Track track = switch (source) {
             case YOUTUBE -> youtubeTrackService.getTrackFromUrl(url);
             case SPOTIFY -> spotifyTrackService.getTrackFromUrl(url);
             case APPLE_MUSIC -> appleTrackService.getTrackFromUrl(url);
@@ -51,6 +53,8 @@ public class TrackService {
             case FLO -> floTrackService.getTrackFromUrl(url);
             case GENIE -> genieTrackService.getTrackFromUrl(url);
         };
+        if (source != SupportedMusicPlatform.YOUTUBE) appleTrackService.enrichTopicMetadata(track);
+        return trackRepository.save(track);
     }
 
     public TrackDetailResponse getTrackDetail(Long trackId) {

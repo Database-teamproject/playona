@@ -26,7 +26,8 @@ import java.util.regex.Pattern;
 public class GenieTrackService {
 
     private final TrackRepository trackRepository;
-    private final WebClient webClient = WebClient.create();
+    private final WebClient webClient = WebClient.builder()
+            .codecs(codecs -> codecs.defaultCodecs().maxInMemorySize(1024 * 1024)).build();
 
     private static final Pattern OG_TITLE = Pattern.compile("property=\"og:title\" content=\"([^\"]+)\"");
     private static final Pattern OG_IMAGE = Pattern.compile("property=\"og:image(?::secure_url)?\" content=\"(https://[^\"]+)\"");
@@ -45,15 +46,15 @@ public class GenieTrackService {
         }
 
         Track existing = trackRepository.findFirstBySourceUrl(sourceUrl).orElse(null);
-        if (existing != null) return existing;
+        if (existing != null && existing.getDurationMs() != null) return existing;
 
         String html = webClient
                 .get()
                 .uri(java.net.URI.create(sourceUrl))
                 .header("User-Agent", "Mozilla/5.0")
                 .retrieve()
-                .bodyToMono(String.class)
-                .block();
+                .bodyToMono(String.class).retry(1)
+                .block(java.time.Duration.ofSeconds(10));
 
         if (html == null) throw new RuntimeException("Genie 페이지 응답 없음: " + sourceUrl);
 
@@ -67,7 +68,10 @@ public class GenieTrackService {
         Matcher imageMatcher = OG_IMAGE.matcher(html);
         String thumbnail = imageMatcher.find() ? imageMatcher.group(1) : null;
 
-        Track track = new Track(title, artist, thumbnail, sourceUrl);
+        Track track = existing != null ? existing : new Track(title, artist, thumbnail, sourceUrl);
+        var duration = Pattern.compile("재생시간[^<]*</span>\\s*<span[^>]*>(\\d+):(\\d{2})</span>").matcher(html);
+        if (duration.find()) track.setDurationMs((Integer.parseInt(duration.group(1)) * 60
+                + Integer.parseInt(duration.group(2))) * 1000);
         return trackRepository.save(track);
     }
 
@@ -91,15 +95,15 @@ public class GenieTrackService {
                     .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
                     .header("Referer", "https://www.genie.co.kr/")
                     .retrieve()
-                    .bodyToMono(String.class)
-                    .block();
+                    .bodyToMono(String.class).retry(1)
+                    .block(java.time.Duration.ofSeconds(10));
             for (String songId : extractSearchSongIds(html)) {
                 String detailUrl = "https://www.genie.co.kr/detail/songInfo?xgnm=" + songId;
                 String detailHtml;
                 try {
                     detailHtml = webClient.get().uri(java.net.URI.create(detailUrl))
                             .header("User-Agent", "Mozilla/5.0")
-                            .retrieve().bodyToMono(String.class).block();
+                            .retrieve().bodyToMono(String.class).retry(1).block(java.time.Duration.ofSeconds(10));
                 } catch (Exception e) {
                     log.warn("[Genie] 후보 상세 조회 실패: songId={}", songId);
                     continue;
@@ -141,7 +145,7 @@ public class GenieTrackService {
         Matcher matcher = Pattern.compile(
                 "fnPlaySong\\('\\s*(\\d+)(?:;[^']*)?'\\s*,\\s*'1'\\)").matcher(html);
         LinkedHashSet<String> ids = new LinkedHashSet<>();
-        while (matcher.find() && ids.size() < 5) ids.add(matcher.group(1));
+        while (matcher.find() && ids.size() < 10) ids.add(matcher.group(1));
         return List.copyOf(ids);
     }
 }

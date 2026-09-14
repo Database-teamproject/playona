@@ -26,7 +26,8 @@ import java.util.regex.Pattern;
 public class MelonTrackService {
 
     private final TrackRepository trackRepository;
-    private final WebClient webClient = WebClient.create();
+    private final WebClient webClient = WebClient.builder()
+            .codecs(codecs -> codecs.defaultCodecs().maxInMemorySize(1024 * 1024)).build();
 
     private static final Pattern OG_TITLE = Pattern.compile("property=\"og:title\" content=\"([^\"]+)\"");
     private static final Pattern OG_IMAGE = Pattern.compile("property=\"og:image\" content=\"([^\"]+)\"");
@@ -38,15 +39,15 @@ public class MelonTrackService {
         String sourceUrl = detailUrl;
 
         Track existing = trackRepository.findFirstBySourceUrl(sourceUrl).orElse(null);
-        if (existing != null) return existing;
+        if (existing != null && existing.getReleaseDate() != null) return existing;
 
         String html = webClient
                 .get()
                 .uri(java.net.URI.create(detailUrl))
                 .header("User-Agent", "Mozilla/5.0")
                 .retrieve()
-                .bodyToMono(String.class)
-                .block();
+                .bodyToMono(String.class).retry(1)
+                .block(java.time.Duration.ofSeconds(10));
 
         if (html == null) throw new RuntimeException("Melon 페이지 응답 없음: " + songId);
 
@@ -60,7 +61,8 @@ public class MelonTrackService {
         Matcher imageMatcher = OG_IMAGE.matcher(html);
         String thumbnail = imageMatcher.find() ? imageMatcher.group(1) : null;
 
-        Track track = new Track(title, artist, thumbnail, sourceUrl);
+        Track track = existing != null ? existing : new Track(title, artist, thumbnail, sourceUrl);
+        track.setReleaseDate(extractReleaseDate(html));
         return trackRepository.save(track);
     }
 
@@ -83,15 +85,15 @@ public class MelonTrackService {
                     .uri(java.net.URI.create("https://www.melon.com/search/song/index.htm?q=" + query))
                     .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
                     .retrieve()
-                    .bodyToMono(String.class)
-                    .block();
+                    .bodyToMono(String.class).retry(1)
+                    .block(java.time.Duration.ofSeconds(10));
             for (String songId : extractSearchSongIds(html)) {
                 String detailUrl = "https://www.melon.com/song/detail.htm?songId=" + songId;
                 String detailHtml;
                 try {
                     detailHtml = webClient.get().uri(java.net.URI.create(detailUrl))
                             .header("User-Agent", "Mozilla/5.0")
-                            .retrieve().bodyToMono(String.class).block();
+                            .retrieve().bodyToMono(String.class).retry(1).block(java.time.Duration.ofSeconds(10));
                 } catch (Exception e) {
                     log.warn("[Melon] 후보 상세 조회 실패: songId={}", songId);
                     continue;
@@ -102,6 +104,8 @@ public class MelonTrackService {
                 String[] metadata = extractTitleAndArtist(metadataMatcher.group(1));
                 if (!TrackMatchVerifier.hasMatchingTitleAndArtist(
                         track.getTitle(), track.getArtist(), metadata[0], metadata[1])) continue;
+                if (!TrackMatchVerifier.isEvidenceMatch(track, metadata[0], metadata[1], null,
+                        extractReleaseDate(detailHtml))) continue;
                 return new PlatformTrack(track, platform, songId, detailUrl, metadata[0], metadata[1]);
             }
         } catch (Exception e) {
@@ -111,6 +115,11 @@ public class MelonTrackService {
         return null;
     }
 
+
+    static java.time.LocalDate extractReleaseDate(String html) {
+        var date = Pattern.compile("발매일</dt>\\s*<dd>(\\d{4}\\.\\d{2}\\.\\d{2})</dd>").matcher(html);
+        return date.find() ? java.time.LocalDate.parse(date.group(1).replace('.', '-')) : null;
+    }
 
     private static String[] extractTitleAndArtist(String value) {
         String ogTitle = htmlUnescape(value);
@@ -135,7 +144,7 @@ public class MelonTrackService {
         if (html == null) return List.of();
         Matcher matcher = Pattern.compile("data-song-no=[\"'](\\d+)[\"']").matcher(html);
         LinkedHashSet<String> ids = new LinkedHashSet<>();
-        while (matcher.find() && ids.size() < 5) ids.add(matcher.group(1));
+        while (matcher.find() && ids.size() < 10) ids.add(matcher.group(1));
         return List.copyOf(ids);
     }
 }

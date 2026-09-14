@@ -9,7 +9,6 @@ import com.playona.api.domain.track.entity.Track;
 import com.playona.api.global.exception.NotFoundException;
 import com.playona.api.domain.track.service.TrackMatchingService;
 import com.playona.api.domain.track.service.TrackService;
-import com.playona.api.domain.track.service.YoutubeTrackService;
 import com.playona.api.domain.user.entity.User;
 import com.playona.api.domain.user.entity.UserPlatformPreference;
 import com.playona.api.domain.user.repository.UserPlatformPreferenceRepository;
@@ -35,7 +34,6 @@ public class LinkService {
 
     private final UserRepository userRepository;
     private final TrackService trackService;
-    private final YoutubeTrackService youtubeTrackService;
     private final SharedLinkRepository sharedLinkRepository;
     private final TrackMatchingService trackMatchingService;
     private final PlatformTrackRepository platformTrackRepository;
@@ -125,10 +123,7 @@ public class LinkService {
             .orElseThrow(() -> new NotFoundException("링크를 찾을 수 없거나 재매칭 권한이 없습니다."));
 
         Track track = link.getTrack();
-        if (track.getSourceUrl() != null
-                && (track.getSourceUrl().contains("youtube.com") || track.getSourceUrl().contains("youtu.be"))) {
-            track = youtubeTrackService.getTrackFromUrl(track.getSourceUrl());
-        }
+        if (track.getSourceUrl() != null) track = trackService.findOrCreateTrack(track.getSourceUrl());
         platformTrackRepository.deleteByTrack(track);
         platformTrackRepository.flush();
         trackMatchingService.rematchAll(track);

@@ -27,6 +27,52 @@ import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
 class YoutubeTrackServiceTest {
+  @Test
+  void corroboratesDistributorCreditsAndKeepsLanguageVersionsSeparate() throws Exception {
+    for (String scenario : List.of("distributor", "no-credits", "wrong-date", "wrong-artist", "english", "wrong-language-date")) {
+      boolean english = scenario.contains("language") || scenario.equals("english");
+      String artist = "Artist";
+      String title = english ? "Artist / Morning (「朝」English Ver. )" : "[MV] Artist - Morning / Official Music Video";
+      String channel = english ? "Artist" : "Distributor";
+      String description = scenario.equals("no-credits") ? "" : "Artist - Morning / Official Music Video";
+      if (scenario.equals("wrong-artist")) description = "Other - Morning / Official Music Video";
+      String date = scenario.contains("date") ? "2025-04-01T00:00:00Z" : "2025-05-01T00:00:00Z";
+      var snippet = Map.of("title", title, "channelTitle", channel, "description", description, "publishedAt", date);
+      var mapper = new ObjectMapper();
+      String search = mapper.writeValueAsString(Map.of("items", List.of(Map.of("id", Map.of("videoId", "testvideo01"), "snippet", snippet))));
+      String details = mapper.writeValueAsString(Map.of("items", List.of(Map.of("id", "testvideo01", "snippet", snippet,
+          "contentDetails", Map.of("duration", "PT3M5S")))));
+      var service = new YoutubeTrackService(mock(TrackRepository.class), mock(AppleTrackService.class));
+      ReflectionTestUtils.setField(service, "webClient", WebClient.builder().baseUrl("https://www.googleapis.com")
+          .exchangeFunction(request -> Mono.just(ClientResponse.create(HttpStatus.OK).header("Content-Type", "application/json")
+              .body(request.url().getPath().endsWith("/search") ? search : details).build())).build());
+      Track source = new Track("Morning", artist, null, "https://example.com/song");
+      source.setDurationMs(180000);
+      source.setReleaseDate(java.time.LocalDate.of(2025, 5, 1));
+      var result = service.searchTrack(source, mock(Platform.class));
+      if (scenario.equals("distributor") || scenario.equals("english")) {
+        assertEquals("https://music.youtube.com/watch?v=testvideo01", result.getUrl());
+      } else assertNull(result, scenario);
+    }
+  }
+
+  @Test
+  void parsesQuotedTitlesAndWrappedOfficialLabelsWithoutAcceptingFanLyrics() {
+    assertEquals(new YoutubeTrackService.SourceMetadata("Love wins all", "IU"),
+        YoutubeTrackService.extractSourceMetadata("IU 'Love wins all' MV", "이지금 [IU Official]"));
+    assertEquals(new YoutubeTrackService.SourceMetadata("Hello", "Adele"),
+        YoutubeTrackService.extractSourceMetadata("Adele - Hello (Official Music Video)", "Adele"));
+    assertEquals(new YoutubeTrackService.SourceMetadata("Shape Of You", "Ed Sheeran"),
+        YoutubeTrackService.extractSourceMetadata("Ed Sheeran - Shape Of You [Official Lyric Video]", "Ed Sheeran"));
+    assertFalse(YoutubeTrackService.isUnsupportedSourceVideo(
+        "Ed Sheeran - Shape Of You [Official Lyric Video]", "EdSheeranVEVO"));
+    assertTrue(YoutubeTrackService.isUnsupportedSourceVideo(
+        "Ed Sheeran - Shape Of You [Official Lyric Video]", "Fan Channel"));
+    assertTrue(YoutubeTrackService.isUnsupportedSourceVideo(
+        "Artist - Song (Live) [Official Lyric Video]", "Artist"));
+    assertEquals(new YoutubeTrackService.SourceMetadata("Ditto", "NewJeans (뉴진스)"),
+        YoutubeTrackService.extractSourceMetadata("NewJeans (뉴진스) 'Ditto' Performance Video", "NewJeans"));
+  }
 
   @Test
   void usesExplicitTopicReleaseDateInsteadOfUtcPublicationDate() throws Exception {

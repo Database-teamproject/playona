@@ -34,7 +34,7 @@ public class FloTrackService {
         String sourceUrl = "https://www.music-flo.com/detail/track/" + trackId + "/details";
 
         Track existing = trackRepository.findFirstBySourceUrl(sourceUrl).orElse(null);
-        if (existing != null) return existing;
+        if (existing != null && existing.getReleaseDate() != null) return existing;
 
         String apiUrl = "https://www.music-flo.com/api/meta/v1/track/" + trackId;
         Map<String, Object> response = webClient
@@ -43,7 +43,7 @@ public class FloTrackService {
                 .header("User-Agent", "Mozilla/5.0")
                 .retrieve()
                 .bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {})
-                .block();
+                .block(java.time.Duration.ofSeconds(10));
 
         if (response == null || !"2000000".equals(response.get("code"))) {
             throw new RuntimeException("FLO API 응답 오류: " + trackId);
@@ -76,9 +76,10 @@ public class FloTrackService {
             }
         }
 
-        Track track = new Track(title, artist, thumbnail, sourceUrl);
+        Track track = existing != null ? existing : new Track(title, artist, thumbnail, sourceUrl);
 
         track.setDurationMs(parseDuration((String) data.get("playTime")));
+        if (album != null) track.setReleaseDate(parseReleaseDate((String) album.get("releaseYmd")));
 
         return trackRepository.save(track);
     }
@@ -92,6 +93,10 @@ public class FloTrackService {
                 PlatformTrack result = searchQuery(track, platform, title + " " + artist);
                 if (result != null) return result;
             }
+        }
+        for (String title : TrackMatchVerifier.searchTitles(track.getTitle())) {
+            PlatformTrack result = searchQuery(track, platform, title);
+            if (result != null) return result;
         }
         return null;
     }
@@ -110,7 +115,7 @@ public class FloTrackService {
                     .header("User-Agent", "Mozilla/5.0")
                     .retrieve()
                     .bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {})
-                    .block();
+                    .block(java.time.Duration.ofSeconds(10));
 
             if (response == null || !"2000000".equals(response.get("code"))) return null;
             Map<String, Object> data = (Map<String, Object>) response.get("data");

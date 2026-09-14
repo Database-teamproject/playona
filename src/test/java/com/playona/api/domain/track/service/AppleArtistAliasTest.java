@@ -22,6 +22,54 @@ import reactor.core.publisher.Mono;
 
 class AppleArtistAliasTest {
   @Test
+  void skipsOriginalWithIdenticalEnglishNameAndFindsCorrectLanguageRecording() throws Exception {
+    var service = new AppleTrackService(mock(TrackRepository.class));
+    String search = new ObjectMapper().writeValueAsString(Map.of("results", List.of(
+        Map.of("trackId", 1, "trackName", "Idol", "artistName", "YOASOBI", "trackTimeMillis", 213234,
+            "releaseDate", "2023-04-12T00:00:00Z", "trackViewUrl", "https://music.apple.com/us/song/1"),
+        Map.of("trackId", 2, "trackName", "Idol", "artistName", "YOASOBI", "trackTimeMillis", 213234,
+            "releaseDate", "2023-05-26T00:00:00Z", "trackViewUrl", "https://music.apple.com/us/song/2"))));
+    ReflectionTestUtils.setField(service, "webClient", WebClient.builder().exchangeFunction(request -> {
+      String body = search;
+      if (request.url().getPath().equals("/lookup")) {
+        boolean original = request.url().getQuery().contains("id=1");
+        body = original
+            ? "{\"results\":[{\"trackId\":1,\"trackName\":\"アイドル\",\"artistName\":\"YOASOBI\",\"trackViewUrl\":\"https://music.apple.com/kr/song/1\"}]}"
+            : "{\"results\":[{\"trackId\":2,\"trackName\":\"Idol\",\"artistName\":\"YOASOBI\",\"trackViewUrl\":\"https://music.apple.com/kr/song/2\"}]}";
+      }
+      return Mono.just(ClientResponse.create(HttpStatus.OK).header("Content-Type", "application/json").body(body).build());
+    }).build());
+    Track source = new Track("Idol", "YOASOBI", null, "https://open.spotify.com/track/example");
+    source.setDurationMs(213233);
+    source.setReleaseDate(LocalDate.of(2023, 5, 26));
+    assertEquals("https://music.apple.com/kr/song/2", service.searchTrack(source, new Platform()).getUrl());
+  }
+
+  @Test
+  void enrichesAppleInputByItsCatalogIdBeforeAnyPlatformSearch() throws Exception {
+    var service = new AppleTrackService(mock(TrackRepository.class));
+    ReflectionTestUtils.setField(service, "webClient", WebClient.builder().exchangeFunction(request -> {
+      assertEquals("/lookup", request.url().getPath());
+      assertTrue(request.url().getQuery().contains("id=7"));
+      boolean korean = request.url().getQuery().contains("country=kr");
+      String response;
+      try {
+        response = new ObjectMapper().writeValueAsString(Map.of("results", List.of(Map.of(
+            "trackId", 7, "trackName", korean ? "아침" : "Morning",
+            "artistName", korean ? "가수" : "Singer", "trackTimeMillis", 180000,
+            "releaseDate", "2025-01-01T00:00:00Z"))));
+      } catch (Exception e) { throw new RuntimeException(e); }
+      return Mono.just(ClientResponse.create(HttpStatus.OK).header("Content-Type", "application/json").body(response).build());
+    }).build());
+    Track source = new Track("아침", "가수", null, "https://music.apple.com/kr/song/7");
+    source.setDurationMs(180000);
+    source.setReleaseDate(LocalDate.of(2025, 1, 1));
+    service.enrichTopicMetadata(source);
+    assertEquals(List.of("아침", "Morning"), TrackMatchVerifier.searchTitles(source.getTitle()));
+    assertTrue(TrackMatchVerifier.hasMatchingArtist(source.getArtist(), "Singer"));
+  }
+
+  @Test
   void usesVerifiedKoreanTitleBeforeDomesticSearchAndRetainsEnglishAlias() throws Exception {
     for (String scenario : List.of("valid", "wrong-id", "wrong-date", "wrong-duration", "missing", "error")) {
       var service = new AppleTrackService(mock(TrackRepository.class));

@@ -25,6 +25,32 @@ import org.springframework.test.util.ReflectionTestUtils;
 class ServiceFlowTest {
 
   @ParameterizedTest
+  @CsvSource({"https://open.spotify.com/track/example", "https://music.apple.com/kr/song/7",
+      "https://www.melon.com/song/detail.htm?songId=7", "https://www.music-flo.com/detail/track/7/details",
+      "https://www.genie.co.kr/detail/songInfo?xgnm=7"})
+  void enrichesEveryCatalogInputBeforeReturningItForMatching(String url) {
+    var repository = mock(com.playona.api.domain.track.repository.TrackRepository.class);
+    var apple = mock(AppleTrackService.class);
+    var spotify = mock(SpotifyTrackService.class);
+    var melon = mock(MelonTrackService.class);
+    var flo = mock(FloTrackService.class);
+    var genie = mock(GenieTrackService.class);
+    Track track = new Track("Morning", "Artist", null, url);
+    when(apple.getTrackFromUrl(url)).thenReturn(track);
+    when(spotify.getTrackFromUrl(url)).thenReturn(track);
+    when(melon.getTrackFromUrl(url)).thenReturn(track);
+    when(flo.getTrackFromUrl(url)).thenReturn(track);
+    when(genie.getTrackFromUrl(url)).thenReturn(track);
+    when(repository.save(track)).thenReturn(track);
+    var service = new TrackService(repository, mock(TrackMatchingService.class), mock(YoutubeTrackService.class),
+        spotify, apple, melon, flo, genie);
+    assertSame(track, service.findOrCreateTrack(url));
+    var order = inOrder(apple, repository);
+    order.verify(apple).enrichTopicMetadata(track);
+    order.verify(repository).save(track);
+  }
+
+  @ParameterizedTest
   @CsvSource({"false,false", "false,true", "true,false", "true,true"})
   void createsOrReusesLinksWithinUserScopeAndAlwaysRematches(boolean signedIn, boolean exists) {
     var users = mock(UserRepository.class);
@@ -32,7 +58,7 @@ class ServiceFlowTest {
     var links = mock(SharedLinkRepository.class);
     var matching = mock(TrackMatchingService.class);
     var platformTracks = mock(PlatformTrackRepository.class);
-    var service = new LinkService(users, tracks, mock(YoutubeTrackService.class), links,
+    var service = new LinkService(users, tracks, links,
         matching, platformTracks, mock(UserPlatformPreferenceRepository.class));
     ReflectionTestUtils.setField(service, "baseUrl", "http://localhost:3000");
     Track track = new Track("Morning", "Artist", null, "https://example.com/track");

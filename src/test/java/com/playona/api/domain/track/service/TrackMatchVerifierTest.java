@@ -8,6 +8,37 @@ import java.time.LocalDate;
 import org.junit.jupiter.api.Test;
 
 class TrackMatchVerifierTest {
+  @Test
+  void separatesWorkCreditsWithoutRemovingRecordingVersions() {
+    Track source = track("フィナーレ。 (Finale.)", "eill", 242000, LocalDate.of(2022, 9, 7));
+    for (String credit : new String[]{
+        " * 애니메이션 [여름을 향한 터널, 이별의 출구] 주제가",
+        "\u00a0*\u00a0애니메이션\u00a0［다른 작품］\u00a0삽입곡",
+        " * 영화 [Another Film] 주제가", " * 드라마 [작품] 엔딩 테마"}) {
+      assertTrue(TrackMatchVerifier.hasMatchingTitleAndArtist(source.getTitle(), "eill", "Finale." + credit, "eill"));
+      assertTrue(TrackMatchVerifier.hasMatchingTitleAndArtist("Finale." + credit, "eill", source.getTitle(), "eill"));
+      assertTrue(TrackMatchVerifier.isEvidenceMatch(source, "Finale." + credit, "eill", 242000, source.getReleaseDate()));
+      for (String version : new String[]{" - Instrumental", " (Live)", " (Remix)"}) {
+        assertFalse(TrackMatchVerifier.isEvidenceMatch(source, "Finale." + version + credit, "eill", 242000, source.getReleaseDate()));
+        assertFalse(TrackMatchVerifier.isEvidenceMatch(source, "Finale." + credit + version, "eill", 242000, source.getReleaseDate()));
+      }
+    }
+    assertFalse(TrackMatchVerifier.isSimilar("Finale.", "Finale. * unrelated subtitle"));
+    assertFalse(TrackMatchVerifier.hasMatchingTitleAndArtist("Finale.", "eill", "Finale. * 영화 [작품] 주제가", "Other Artist"));
+    assertTrue(TrackMatchVerifier.searchTitles("Finale. * 영화 [작품] 주제가").contains("Finale."));
+  }
+
+  @org.junit.jupiter.api.Test
+  void separatesBilingualArtistCreditsAndRejectsConflictingRecordingDates() {
+    org.junit.jupiter.api.Assertions.assertTrue(TrackMatchVerifier.hasMatchingArtist("米津玄師  Kenshi Yonezu", "Kenshi Yonezu"));
+    org.junit.jupiter.api.Assertions.assertTrue(TrackMatchVerifier.hasMatchingArtist("Kenshi Yonezu 米津玄師", "米津玄師"));
+    org.junit.jupiter.api.Assertions.assertFalse(TrackMatchVerifier.hasMatchingArtist("Artist & Other Artist", "Other Artist"));
+    var track = new com.playona.api.domain.track.entity.Track("Idol", "YOASOBI", null, "https://open.spotify.com/track/example");
+    track.setDurationMs(213233);
+    track.setReleaseDate(java.time.LocalDate.of(2023, 5, 26));
+    org.junit.jupiter.api.Assertions.assertFalse(TrackMatchVerifier.isEvidenceMatch(track, "アイドル", "YOASOBI", 213234, java.time.LocalDate.of(2023, 4, 12)));
+    org.junit.jupiter.api.Assertions.assertTrue(TrackMatchVerifier.isEvidenceMatch(track, "Idol", "YOASOBI", 213234, java.time.LocalDate.of(2023, 5, 26)));
+  }
 
   @Test
   void rejectsMissingEvidenceForDiscrepantMetadata() {
