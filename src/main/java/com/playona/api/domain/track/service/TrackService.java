@@ -5,6 +5,8 @@ import com.playona.api.domain.track.dto.TrackResolveResponse;
 import com.playona.api.domain.track.entity.Track;
 import com.playona.api.domain.track.repository.TrackRepository;
 import com.playona.api.global.exception.NotFoundException;
+import java.net.URI;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +24,31 @@ public class TrackService {
     private final MelonTrackService melonTrackService;
     private final FloTrackService floTrackService;
     private final GenieTrackService genieTrackService;
+
+    public Optional<Track> findStoredTrack(String url) {
+        return switch (SupportedMusicPlatform.fromUrl(url)) {
+            case YOUTUBE -> trackRepository.findFirstBySourceUrl(
+                "https://music.youtube.com/watch?v=" + YoutubeTrackService.extractVideoId(url));
+            case SPOTIFY -> trackRepository.findFirstBySourceUrl(
+                "https://open.spotify.com/track/" + SpotifyTrackService.extractTrackId(url));
+            case APPLE_MUSIC -> {
+                String[] path = URI.create(url).getPath().split("/");
+                if (path.length < 2 || !path[1].matches("[a-z]{2}")) yield Optional.empty();
+                String storefront = "https://music.apple.com/" + path[1] + "/";
+                String id = AppleTrackService.extractTrackId(url);
+                yield trackRepository.findFirstBySourceUrlStartingWithAndSourceUrlEndingWith(
+                    storefront, "?i=" + id)
+                    .or(() -> trackRepository.findFirstBySourceUrlStartingWithAndSourceUrlEndingWith(
+                        storefront, "/" + id));
+            }
+            case MELON -> trackRepository.findFirstBySourceUrl(
+                "https://www.melon.com/song/detail.htm?songId=" + MelonTrackService.extractSongId(url));
+            case FLO -> trackRepository.findFirstBySourceUrl(
+                "https://www.music-flo.com/detail/track/" + FloTrackService.extractTrackId(url) + "/details");
+            case GENIE -> url.contains("albumInfo") ? Optional.empty() : trackRepository.findFirstBySourceUrl(
+                "https://www.genie.co.kr/detail/songInfo?xgnm=" + GenieTrackService.extractSongId(url));
+        };
+    }
 
     @Transactional
     public TrackResolveResponse resolveTrack(String url) {

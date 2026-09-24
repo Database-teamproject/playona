@@ -9,5 +9,6 @@ public interface TrackRepository extends JpaRepository<Track, Long> {
   // Different source URLs can share a recording; reuse the oldest stored track.
   Optional<Track> findFirstByIsrcOrderByIdAsc(String isrc);
   Optional<Track> findFirstBySourceUrl(String sourceUrl);
+  Optional<Track> findFirstBySourceUrlStartingWithAndSourceUrlEndingWith(String prefix, String suffix);
   Optional<Track> findByTrackUuid(String trackUuid);
 }

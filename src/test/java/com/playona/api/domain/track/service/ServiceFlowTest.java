@@ -16,6 +16,8 @@ import com.playona.api.domain.user.repository.UserPlatformPreferenceRepository;
 import com.playona.api.domain.user.repository.UserRepository;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -23,6 +25,190 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
 
 class ServiceFlowTest {
+
+  @org.junit.jupiter.api.Test
+  void searchesIndependentPlatformsTogetherAfterSpotifyAddsIsrc() throws Exception {
+    var platforms = mock(PlatformRepository.class);
+    var matches = mock(PlatformTrackRepository.class);
+    var spotify = mock(SpotifyTrackService.class);
+    var melon = mock(MelonTrackService.class);
+    var genie = mock(GenieTrackService.class);
+    var service = new TrackMatchingService(platforms, matches, spotify,
+        mock(YoutubeTrackService.class), mock(AppleTrackService.class), melon,
+        mock(FloTrackService.class), genie, mock(AiMatchAdvisor.class));
+    Platform spotifyPlatform = mock(Platform.class), melonPlatform = mock(Platform.class),
+        geniePlatform = mock(Platform.class);
+    when(spotifyPlatform.getSlug()).thenReturn("spotify");
+    when(melonPlatform.getSlug()).thenReturn("melon");
+    when(geniePlatform.getSlug()).thenReturn("genie");
+    when(platforms.findByIsActiveTrue()).thenReturn(List.of(melonPlatform, spotifyPlatform, geniePlatform));
+    Track track = new Track("Morning", "Artist", null, "https://music.youtube.com/watch?v=example");
+    var started = new CountDownLatch(2);
+    Thread caller = Thread.currentThread();
+    when(spotify.searchTrack(track, spotifyPlatform)).thenAnswer(invocation -> {
+      track.setIsrc("ISRC1");
+      return new PlatformTrack(track, spotifyPlatform, "spotify", "https://example.com/spotify", "Morning", "Artist");
+    });
+    when(melon.searchTrack(track, melonPlatform)).thenAnswer(invocation -> {
+      assertEquals("ISRC1", track.getIsrc());
+      started.countDown();
+      assertTrue(started.await(2, TimeUnit.SECONDS));
+      return new PlatformTrack(track, melonPlatform, "melon", "https://example.com/melon", "Morning", "Artist");
+    });
+    when(genie.searchTrack(track, geniePlatform)).thenAnswer(invocation -> {
+      assertEquals("ISRC1", track.getIsrc());
+      started.countDown();
+      assertTrue(started.await(2, TimeUnit.SECONDS));
+      return new PlatformTrack(track, geniePlatform, "genie", "https://example.com/genie", "Morning", "Artist");
+    });
+    when(matches.save(any())).thenAnswer(invocation -> {
+      assertSame(caller, Thread.currentThread());
+      return invocation.getArgument(0);
+    });
+
+    service.matchAll(track);
+
+    verify(matches, times(3)).save(any());
+  }
+
+  @ParameterizedTest
+  @CsvSource({"melon", "flo", "genie"})
+  void reusesVerifiedDomesticCandidateWithoutRepeatingSearch(String slug) {
+    var platforms = mock(PlatformRepository.class);
+    var matches = mock(PlatformTrackRepository.class);
+    var melon = mock(MelonTrackService.class);
+    var flo = mock(FloTrackService.class);
+    var genie = mock(GenieTrackService.class);
+    var advisor = mock(AiMatchAdvisor.class);
+    var service = new TrackMatchingService(platforms, matches, mock(SpotifyTrackService.class),
+        mock(YoutubeTrackService.class), mock(AppleTrackService.class), melon, flo, genie, advisor);
+    Platform platform = mock(Platform.class);
+    when(platform.getSlug()).thenReturn(slug);
+    when(platforms.findByIsActiveTrue()).thenReturn(List.of(platform));
+    Track track = new Track("Morning", "Artist", null, "https://music.youtube.com/watch?v=example");
+    track.setReleaseDate(java.time.LocalDate.of(2025, 1, 1));
+    track.setDurationMs(180_000);
+    MatchCandidate candidate = new MatchCandidate("correct", "https://example.com/correct",
+        "Morning", "Artist", "Album", 180_000, track.getReleaseDate(), null);
+    when(advisor.enabled()).thenReturn(true);
+    when(advisor.choose(eq(track), eq(platform), anyList(), any(PlatformTrack.class)))
+        .thenAnswer(invocation -> invocation.getArgument(3));
+    switch (slug) {
+      case "melon" -> when(melon.searchCandidates(track)).thenReturn(List.of(candidate));
+      case "flo" -> when(flo.searchCandidates(track)).thenReturn(List.of(candidate));
+      default -> when(genie.searchCandidates(track)).thenReturn(List.of(candidate));
+    }
+
+    service.matchAll(track);
+
+    verify(matches).save(argThat(match -> "correct".equals(match.getPlatformTrackId())));
+    verify(melon, never()).searchTrack(any(), any());
+    verify(flo, never()).searchTrack(any(), any());
+    verify(genie, never()).searchTrack(any(), any());
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+      "https://music.youtube.com/watch?v=AMg1locCoN0&si=share,https://music.youtube.com/watch?v=AMg1locCoN0",
+      "https://open.spotify.com/track/5ic62hKqeDhZsa9l6YQxzJ?si=share,https://open.spotify.com/track/5ic62hKqeDhZsa9l6YQxzJ",
+      "https://www.melon.com/song/detail.htm?songId=36382580&ref=share,https://www.melon.com/song/detail.htm?songId=36382580",
+      "https://www.music-flo.com/detail/track/471606727/details?share=1,https://www.music-flo.com/detail/track/471606727/details",
+      "https://www.genie.co.kr/detail/songInfo?xgnm=101407645&share=1,https://www.genie.co.kr/detail/songInfo?xgnm=101407645"
+  })
+  void findsStoredTrackUsingCanonicalShareUrl(String shared, String canonical) {
+    var repository = mock(com.playona.api.domain.track.repository.TrackRepository.class);
+    var service = new TrackService(repository, mock(TrackMatchingService.class),
+        mock(YoutubeTrackService.class), mock(SpotifyTrackService.class), mock(AppleTrackService.class),
+        mock(MelonTrackService.class), mock(FloTrackService.class), mock(GenieTrackService.class));
+    Track track = new Track("Morning", "Artist", null, canonical);
+    when(repository.findFirstBySourceUrl(canonical)).thenReturn(Optional.of(track));
+
+    assertSame(track, service.findStoredTrack(shared).orElseThrow());
+  }
+
+  @org.junit.jupiter.api.Test
+  void findsStoredAppleTrackByIdAcrossLocalizedUrls() {
+    var repository = mock(com.playona.api.domain.track.repository.TrackRepository.class);
+    var service = new TrackService(repository, mock(TrackMatchingService.class),
+        mock(YoutubeTrackService.class), mock(SpotifyTrackService.class), mock(AppleTrackService.class),
+        mock(MelonTrackService.class), mock(FloTrackService.class), mock(GenieTrackService.class));
+    Track track = new Track("헤어지자 말해요", "박재정", null,
+        "https://music.apple.com/kr/album/%ED%97%A4%EC%96%B4%EC%A7%80%EC%9E%90/1683448045?i=1683448046");
+    when(repository.findFirstBySourceUrlStartingWithAndSourceUrlEndingWith(
+        "https://music.apple.com/kr/", "?i=1683448046")).thenReturn(Optional.of(track));
+
+    assertSame(track, service.findStoredTrack(
+        "https://music.apple.com/kr/album/헤어지자-말해요/1683448045?i=1683448046&uo=4").orElseThrow());
+  }
+
+  @org.junit.jupiter.api.Test
+  void recentlyMatchedLinkSkipsSourceFetchAndPlatformSearch() {
+    var users = mock(UserRepository.class);
+    var tracks = mock(TrackService.class);
+    var links = mock(SharedLinkRepository.class);
+    var matching = mock(TrackMatchingService.class);
+    var platformTracks = mock(PlatformTrackRepository.class);
+    var service = new LinkService(users, tracks, links, matching, platformTracks,
+        mock(UserPlatformPreferenceRepository.class));
+    ReflectionTestUtils.setField(service, "baseUrl", "http://localhost:3000");
+    String url = "https://music.youtube.com/watch?v=AMg1locCoN0";
+    Track track = new Track("Morning", "Artist", null, url);
+    SharedLink link = new SharedLink("existing", track, null);
+    when(tracks.findStoredTrack(url)).thenReturn(Optional.of(track));
+    when(matching.recentlyMatched(track)).thenReturn(true);
+    when(links.findFirstByTrackAndUserIsNull(track)).thenReturn(Optional.of(link));
+    when(platformTracks.findByTrack(track)).thenReturn(List.of());
+
+    assertEquals("existing", service.createLink(url).getShortCode());
+
+    verify(tracks, never()).findOrCreateTrack(any());
+    verify(matching, never()).matchAll(any());
+  }
+
+  @org.junit.jupiter.api.Test
+  void explicitRematchInvalidatesRecentResult() {
+    var matching = new TrackMatchingService(mock(PlatformRepository.class),
+        mock(PlatformTrackRepository.class), mock(SpotifyTrackService.class),
+        mock(YoutubeTrackService.class), mock(AppleTrackService.class),
+        mock(MelonTrackService.class), mock(FloTrackService.class),
+        mock(GenieTrackService.class), mock(AiMatchAdvisor.class));
+    Track track = new Track("Morning", "Artist", null, "https://music.youtube.com/watch?v=example");
+    ReflectionTestUtils.setField(track, "id", 1L);
+
+    assertFalse(matching.recentlyMatched(track));
+    matching.rememberRecentMatch(track);
+    assertTrue(matching.recentlyMatched(track));
+    matching.forgetRecentMatch(track);
+    assertFalse(matching.recentlyMatched(track));
+  }
+
+  @org.junit.jupiter.api.Test
+  void unverifiedCandidateStillUsesOriginalSearch() {
+    var platforms = mock(PlatformRepository.class);
+    var matches = mock(PlatformTrackRepository.class);
+    var melon = mock(MelonTrackService.class);
+    var advisor = mock(AiMatchAdvisor.class);
+    var service = new TrackMatchingService(platforms, matches, mock(SpotifyTrackService.class),
+        mock(YoutubeTrackService.class), mock(AppleTrackService.class), melon,
+        mock(FloTrackService.class), mock(GenieTrackService.class), advisor);
+    Platform platform = mock(Platform.class);
+    when(platform.getSlug()).thenReturn("melon");
+    when(platforms.findByIsActiveTrue()).thenReturn(List.of(platform));
+    Track track = new Track("Morning", "Artist", null, "https://music.youtube.com/watch?v=example");
+    MatchCandidate wrong = new MatchCandidate("wrong", "https://example.com/wrong",
+        "Other Song", "Other Artist", null, null, null, null);
+    PlatformTrack verified = new PlatformTrack(track, platform, "correct",
+        "https://example.com/correct", "Morning", "Artist");
+    when(advisor.enabled()).thenReturn(true);
+    when(melon.searchCandidates(track)).thenReturn(List.of(wrong));
+    when(melon.searchTrack(track, platform)).thenReturn(verified);
+    when(advisor.choose(eq(track), eq(platform), anyList(), eq(verified))).thenReturn(verified);
+
+    service.matchAll(track);
+
+    verify(melon).searchTrack(track, platform);
+    verify(matches).save(verified);
+  }
 
   @ParameterizedTest
   @CsvSource({"kr,Apple Music", "us,Apple Music (미국 스토어)", "jp,Apple Music (일본 스토어)"})

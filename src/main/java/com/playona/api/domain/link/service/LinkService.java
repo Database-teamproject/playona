@@ -41,7 +41,9 @@ public class LinkService {
 
     @Transactional
     public LinkResponse createLink(String url) {
-        Track track = trackService.findOrCreateTrack(url);
+        Track stored = trackService.findStoredTrack(url).orElse(null);
+        boolean fresh = stored != null && trackMatchingService.recentlyMatched(stored);
+        Track track = fresh ? stored : trackService.findOrCreateTrack(url);
 
         User user = null;
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -57,7 +59,10 @@ public class LinkService {
         if (sharedLink == null) {
             sharedLink = sharedLinkRepository.save(new SharedLink(generateShortCode(), track, user));
         }
-        trackMatchingService.matchAll(track);
+        if (!fresh) {
+            List<PlatformTrack> matched = trackMatchingService.matchAll(track);
+            if (matched.size() > 1) trackMatchingService.rememberRecentMatch(track);
+        }
         return new LinkResponse(sharedLink, baseUrl, platformTrackRepository.findByTrack(track));
     }
 
@@ -123,6 +128,7 @@ public class LinkService {
             .orElseThrow(() -> new NotFoundException("링크를 찾을 수 없거나 재매칭 권한이 없습니다."));
 
         Track track = link.getTrack();
+        trackMatchingService.forgetRecentMatch(track);
         if (track.getSourceUrl() != null) track = trackService.findOrCreateTrack(track.getSourceUrl());
         trackMatchingService.rematchAll(track);
 
