@@ -33,7 +33,8 @@ jobs:
             echo "SPOTIFY_CLIENT_SECRET=${{ secrets.SPOTIFY_CLIENT_SECRET }}" >> .env
             echo "YOUTUBE_API_KEY=${{ secrets.YOUTUBE_API_KEY }}" >> .env
             echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> .env
-            echo "AI_MATCHING_MODE=off" >> .env
+            echo "AI_MATCHING_MODE=assist" >> .env
+            echo "AI_MATCHING_MAX_REQUESTS=50" >> .env
             echo "APP_BASE_URL=${{ secrets.APP_BASE_URL }}" >> .env
             echo "OAUTH2_REDIRECT_URL=${{ secrets.OAUTH2_REDIRECT_URL }}" >> .env
             echo "KAKAO_CLIENT_ID=${{ secrets.KAKAO_CLIENT_ID }}" >> .env
@@ -47,6 +48,7 @@ jobs:
 
             # 3. 앱 재빌드 & 재시작 (DB 컨테이너는 유지)
             docker-compose up -d --build app
+            docker exec playona-app sh -c 'test "$AI_MATCHING_MODE" = assist && test -n "$OPENAI_API_KEY" && test "$AI_MATCHING_MAX_REQUESTS" = 50'
 
             # 4. 불필요한 이미지 및 빌드 캐시 정리
             docker system prune -f

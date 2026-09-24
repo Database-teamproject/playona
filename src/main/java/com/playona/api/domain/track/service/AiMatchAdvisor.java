@@ -11,6 +11,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -29,12 +30,18 @@ class AiMatchAdvisor {
   @Value("${matching.ai.model:gpt-4o-mini}")
   private String model;
 
+  @Value("${matching.ai.max-requests:0}")
+  private int maxRequests;
+
   private final ObjectMapper mapper = new ObjectMapper();
   private final WebClient webClient = WebClient.create();
+  // ponytail: single-process cap resets on restart; use a shared quota if deploying multiple app instances.
+  private final AtomicInteger requests = new AtomicInteger();
 
   boolean enabled() {
     return ("shadow".equalsIgnoreCase(mode) || "assist".equalsIgnoreCase(mode))
-        && apiKey != null && !apiKey.isBlank();
+        && apiKey != null && !apiKey.isBlank()
+        && (maxRequests <= 0 || requests.get() < maxRequests);
   }
 
   PlatformTrack choose(Track source, Platform platform, List<MatchCandidate> candidates,
@@ -56,6 +63,7 @@ class AiMatchAdvisor {
     if (baseline != null && eligible.stream().anyMatch(candidate -> isStrongMatch(source, candidate, baseline))) {
       return baseline;
     }
+    if (maxRequests > 0 && requests.incrementAndGet() > maxRequests) return baseline;
     try {
       Map<String, Object> payload = new LinkedHashMap<>();
       payload.put("source", Map.of("title", source.getTitle(), "artist", source.getArtist(),

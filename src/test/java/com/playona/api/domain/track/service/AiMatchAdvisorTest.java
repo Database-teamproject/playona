@@ -1,6 +1,7 @@
 package com.playona.api.domain.track.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
@@ -97,6 +98,22 @@ class AiMatchAdvisorTest {
         "Other Song", "박재정");
     assertSame(baseline, advisor.choose(source, platform,
         List.of(candidate("correct", "Let's Say Goodbye", 250_000)), baseline));
+  }
+
+  @Test
+  void requestCapReturnsToBaselineMatching() throws Exception {
+    AiMatchAdvisor advisor = advisor("assist", new AtomicReference<>("correct"),
+        new AtomicReference<>("match"));
+    ReflectionTestUtils.setField(advisor, "maxRequests", 1);
+    Platform platform = platform();
+    Track source = source();
+    PlatformTrack baseline = new PlatformTrack(source, platform, "old", "https://example.com/old",
+        "Other Song", "박재정");
+    List<MatchCandidate> candidates = List.of(candidate("correct", "Let's Say Goodbye", 250_000));
+
+    assertEquals("correct", advisor.choose(source, platform, candidates, baseline).getPlatformTrackId());
+    assertFalse(advisor.enabled());
+    assertSame(baseline, advisor.choose(source, platform, candidates, baseline));
   }
 
   private AiMatchAdvisor advisor(String mode, AtomicReference<String> answer,

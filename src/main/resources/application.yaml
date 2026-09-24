@@ -74,6 +74,7 @@ matching:
     mode: ${AI_MATCHING_MODE:off}
     api-key: ${OPENAI_API_KEY:}
     model: ${AI_MATCHING_MODEL:gpt-4o-mini}
+    max-requests: ${AI_MATCHING_MAX_REQUESTS:0}
 
 
 # ── EC2 프로덕션 배포 시 반드시 설정해야 할 환경변수 ──────────────────────────
