@@ -22,6 +22,62 @@ import reactor.core.publisher.Mono;
 
 class AppleArtistAliasTest {
   @Test
+  void collectsRegionalSongCandidatesBeforeAiReview() throws Exception {
+    var service = new AppleTrackService(mock(TrackRepository.class));
+    var mapper = new ObjectMapper();
+    ReflectionTestUtils.setField(service, "webClient", WebClient.builder().exchangeFunction(request -> {
+      String country = request.url().getQuery().contains("country=kr") ? "kr" : "us";
+      int id = country.equals("kr") ? 7 : 8;
+      String body;
+      try {
+        body = mapper.writeValueAsString(Map.of("results", List.of(Map.of(
+            "trackId", id, "trackName", country.equals("kr") ? "아침" : "Morning",
+            "artistName", "Artist", "trackTimeMillis", 180000,
+            "releaseDate", "2025-01-01T00:00:00Z",
+            "trackViewUrl", "https://music.apple.com/" + country + "/song/" + id))));
+      } catch (Exception e) { throw new RuntimeException(e); }
+      return Mono.just(ClientResponse.create(HttpStatus.OK)
+          .header("Content-Type", "application/json").body(body).build());
+    }).build());
+    Track source = new Track("아침 (Morning)", "Artist", null, "https://example.com/song");
+    List<MatchCandidate> candidates = service.searchCandidates(source);
+    assertEquals(2, candidates.size());
+    assertEquals("https://music.apple.com/kr/song/7", candidates.get(0).url());
+    assertEquals(180000, candidates.get(0).durationMs());
+  }
+
+  @Test
+  void resolvesSeparateRegionalIdsOnlyWithUnambiguousRecordingEvidence() throws Exception {
+    for (String scenario : List.of("match", "artist", "date", "duration", "live", "ambiguous", "unavailable")) {
+      var service = new AppleTrackService(mock(TrackRepository.class));
+      Map original = Map.of("trackId", 1, "artistId", 7, "artistName", "Artist", "trackName", "Morning",
+          "trackTimeMillis", 180000, "releaseDate", "2025-01-01T00:00:00Z");
+      Map candidate = Map.of("trackId", 2, "artistId", scenario.equals("artist") ? 8 : 7,
+          "artistName", "가수", "trackName", scenario.equals("live") ? "아침 (Live)" : "아침",
+          "trackTimeMillis", scenario.equals("duration") ? 195000 : 180500,
+          "releaseDate", scenario.equals("date") ? "2025-02-01T00:00:00Z" : "2025-01-01T00:00:00Z",
+          "trackViewUrl", "https://music.apple.com/kr/song/2");
+      var duplicate = new java.util.HashMap(candidate);
+      duplicate.put("trackId", 3);
+      duplicate.put("trackViewUrl", "https://music.apple.com/kr/song/3");
+      var mapper = new ObjectMapper();
+      String sourceJson = mapper.writeValueAsString(Map.of("results", List.of(original)));
+      String catalogJson = mapper.writeValueAsString(Map.of("results", scenario.equals("unavailable") ? List.of()
+          : scenario.equals("ambiguous") ? List.of(candidate, duplicate) : List.of(candidate)));
+      ReflectionTestUtils.setField(service, "webClient", WebClient.builder().exchangeFunction(request -> {
+        String query = request.url().getQuery();
+        String body = query.contains("id=7&") ? catalogJson : query.contains("country=us") ? sourceJson : "{\"results\":[]}";
+        return Mono.just(ClientResponse.create(HttpStatus.OK).header("Content-Type", "application/json").body(body).build());
+      }).build());
+      Track track = new Track("아침 (Morning)", "가수 (Artist)", null, "https://music.apple.com/us/song/1");
+      PlatformTrack match = new PlatformTrack(track, mock(Platform.class), "1", track.getSourceUrl(), "Morning", "Artist");
+      PlatformTrack result = service.preferKoreanStorefront(match);
+      if (scenario.equals("match")) assertEquals("https://music.apple.com/kr/song/2", result.getUrl());
+      else assertSame(match, result, scenario);
+    }
+  }
+
+  @Test
   void skipsOriginalWithIdenticalEnglishNameAndFindsCorrectLanguageRecording() throws Exception {
     var service = new AppleTrackService(mock(TrackRepository.class));
     String search = new ObjectMapper().writeValueAsString(Map.of("results", List.of(

@@ -97,10 +97,33 @@ final class TrackMatchVerifier {
         && hasMatchingReleaseDate(source.getReleaseDate(), candidateReleaseDate);
   }
 
+  static boolean isKoreanReleaseMatch(Track source, String candidateTitle, String candidateArtist,
+      Integer candidateDurationMs, LocalDate candidateReleaseDate) {
+    List<String> titles = names(source.getTitle());
+    if (titles.size() != 2 || !titles.get(0).matches(".*[가-힣].*")
+        || !candidateTitle.matches(".*[a-zA-Z].*")
+        || !isSimilar(titles.get(1), candidateTitle)
+        || !hasMatchingArtist(source.getArtist(), candidateArtist)
+        || VERSION.matcher(source.getTitle()).find() || VERSION.matcher(candidateTitle).find()
+        || source.getReleaseDate() == null || candidateReleaseDate == null
+        || candidateReleaseDate.isBefore(source.getReleaseDate())
+        || source.getDurationMs() == null || candidateDurationMs == null) return false;
+    // ponytail: identical duration and verified title alias support a later catalog release;
+    // recording IDs are needed to distinguish rare same-length language editions.
+    return Math.abs(source.getDurationMs().longValue() - candidateDurationMs) <= 2_000L;
+  }
+
   static boolean hasMatchingTitleAndArtist(String title, String artist,
       String candidateTitle, String candidateArtist) {
     return isSimilar(title, candidateTitle)
         && hasMatchingArtist(artist, candidateArtist);
+  }
+
+  static boolean hasConflictingVersionLabel(String left, String right) {
+    return !VERSION.matcher(left == null ? "" : left).results()
+        .map(match -> match.group().toLowerCase(Locale.ROOT)).toList()
+        .equals(VERSION.matcher(right == null ? "" : right).results()
+            .map(match -> match.group().toLowerCase(Locale.ROOT)).toList());
   }
 
   static boolean isSimilar(String left, String right) {

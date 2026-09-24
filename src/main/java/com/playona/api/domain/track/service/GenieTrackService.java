@@ -15,6 +15,8 @@ import org.springframework.web.reactive.function.client.WebClient;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -69,9 +71,8 @@ public class GenieTrackService {
         String thumbnail = imageMatcher.find() ? imageMatcher.group(1) : null;
 
         Track track = existing != null ? existing : new Track(title, artist, thumbnail, sourceUrl);
-        var duration = Pattern.compile("재생시간[^<]*</span>\\s*<span[^>]*>(\\d+):(\\d{2})</span>").matcher(html);
-        if (duration.find()) track.setDurationMs((Integer.parseInt(duration.group(1)) * 60
-                + Integer.parseInt(duration.group(2))) * 1000);
+        Integer duration = extractDurationMs(html);
+        if (duration != null) track.setDurationMs(duration);
         return trackRepository.save(track);
     }
 
@@ -83,6 +84,44 @@ public class GenieTrackService {
             if (result != null) return result;
         }
         return null;
+    }
+
+    List<MatchCandidate> searchCandidates(Track track) {
+        if (track.getTitle() == null) return List.of();
+        var found = new LinkedHashMap<String, MatchCandidate>();
+        for (String query : TrackMatchVerifier.koreanSearchQueries(track)) {
+            try {
+                String encoded = URLEncoder.encode(query, StandardCharsets.UTF_8).replace("+", "%20");
+                String html = webClient.get().uri(java.net.URI.create(
+                    "https://www.genie.co.kr/search/searchMain?query=" + encoded))
+                    .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                    .header("Referer", "https://www.genie.co.kr/")
+                    .retrieve().bodyToMono(String.class).retry(1).block(java.time.Duration.ofSeconds(10));
+                for (String id : extractSearchSongIds(html)) {
+                    if (found.containsKey(id)) continue;
+                    String url = "https://www.genie.co.kr/detail/songInfo?xgnm=" + id;
+                    try {
+                        String detail = webClient.get().uri(java.net.URI.create(url))
+                            .header("User-Agent", "Mozilla/5.0").retrieve().bodyToMono(String.class).retry(1)
+                            .block(java.time.Duration.ofSeconds(10));
+                        Matcher metadata = OG_TITLE.matcher(detail == null ? "" : detail);
+                        if (!metadata.find()) continue;
+                        String[] names = extractTitleAndArtist(metadata.group(1));
+                        found.put(id, new MatchCandidate(id, url, names[0], names[1], null,
+                            extractDurationMs(detail), null, null));
+                        if (found.size() >= 20) return new ArrayList<>(found.values());
+                    } catch (Exception ignored) {}
+                }
+            } catch (Exception ignored) {}
+        }
+        return new ArrayList<>(found.values());
+    }
+
+    private static Integer extractDurationMs(String html) {
+        if (html == null) return null;
+        var duration = Pattern.compile("재생시간[^<]*</span>\\s*<span[^>]*>(\\d+):(\\d{2})</span>").matcher(html);
+        return duration.find() ? (Integer.parseInt(duration.group(1)) * 60
+            + Integer.parseInt(duration.group(2))) * 1000 : null;
     }
 
     private PlatformTrack searchQuery(Track track, Platform platform, String rawQuery) {

@@ -35,7 +35,7 @@ public class LinkResponse {
             .filter(pt -> !pt.isSearchFallback())
             .map(pt -> Map.of(
                     "slug", pt.getPlatform().getSlug(),
-                    "name", pt.getPlatform().getName(),
+                    "name", pt.getDisplayName(),
                     "url", pt.getUrl(),
                     "thumbnailUrl", trackThumbnail
             ))

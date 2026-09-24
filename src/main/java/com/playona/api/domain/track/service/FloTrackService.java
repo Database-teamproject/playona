@@ -14,6 +14,8 @@ import org.springframework.web.reactive.function.client.WebClient;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -99,6 +101,45 @@ public class FloTrackService {
             if (result != null) return result;
         }
         return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    List<MatchCandidate> searchCandidates(Track track) {
+        if (track.getTitle() == null) return List.of();
+        var found = new LinkedHashMap<String, MatchCandidate>();
+        for (String query : TrackMatchVerifier.koreanSearchQueries(track)) {
+            try {
+                String url = "https://www.music-flo.com/api/search/v2/search?keyword="
+                    + URLEncoder.encode(query, StandardCharsets.UTF_8) + "&searchType=TRACK&size=10";
+                Map<String, Object> response = webClient.get().uri(java.net.URI.create(url))
+                    .header("User-Agent", "Mozilla/5.0").retrieve()
+                    .bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {})
+                    .block(java.time.Duration.ofSeconds(10));
+                if (response == null || !"2000000".equals(response.get("code"))
+                    || !(response.get("data") instanceof Map data)
+                    || !(data.get("list") instanceof List groups)) continue;
+                for (Object rawGroup : groups) {
+                    Map group = (Map) rawGroup;
+                    if (!"TRACK".equals(group.get("type")) || !(group.get("list") instanceof List tracks)) continue;
+                    for (Object rawCandidate : tracks) {
+                        Map candidate = (Map) rawCandidate;
+                        if (candidate.get("id") == null || !(candidate.get("artistList") instanceof List artists)
+                            || artists.isEmpty()) continue;
+                        String id = candidate.get("id").toString();
+                        if (found.containsKey(id)) continue;
+                        Map artist = (Map) artists.get(0);
+                        Map album = candidate.get("album") instanceof Map value ? value : Map.of();
+                        found.put(id, new MatchCandidate(id,
+                            "https://www.music-flo.com/detail/track/" + id + "/details",
+                            (String) candidate.get("name"), (String) artist.get("name"),
+                            (String) album.get("name"), parseDuration((String) candidate.get("playTime")),
+                            parseReleaseDate((String) album.get("releaseYmd")), null));
+                        if (found.size() >= 20) return new ArrayList<>(found.values());
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+        return new ArrayList<>(found.values());
     }
 
     @SuppressWarnings("unchecked")

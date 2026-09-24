@@ -12,9 +12,13 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 
@@ -135,6 +139,7 @@ public class AppleTrackService {
           ? new PlatformTrack(track, null, extractTrackId(track.getSourceUrl()), track.getSourceUrl(), track.getTitle(), track.getArtist())
           : searchAppleByTitleArtist(probe, null);
       if (recording == null) return;
+      recording = preferKoreanStorefront(recording);
       String id = recording.getPlatformTrackId();
       LocalDate originalDate = track.getReleaseDate();
       String originalArtist = track.getArtist();
@@ -202,6 +207,41 @@ public class AppleTrackService {
     }
   }
 
+  List<MatchCandidate> searchCandidates(Track track) {
+    if (track.getTitle() == null || track.getArtist() == null) return List.of();
+    var queries = new LinkedHashSet<String>();
+    for (String artist : TrackMatchVerifier.artistNames(track.getArtist())) {
+      for (String title : TrackMatchVerifier.searchTitles(track.getTitle())) queries.add(title + " " + artist);
+    }
+    queries.addAll(TrackMatchVerifier.searchTitles(track.getTitle()));
+    var found = new LinkedHashMap<String, MatchCandidate>();
+    for (String query : queries) {
+      String encoded = URLEncoder.encode(query, StandardCharsets.UTF_8).replace("+", "%20");
+      for (String country : List.of("kr", "us", "jp")) {
+        try {
+          Map response = getAppleResponseAsMap("https://itunes.apple.com/search?term=" + encoded
+              + "&entity=song&limit=15&country=" + country, "Failed to read Apple candidates");
+          if (!(response.get("results") instanceof List results)) continue;
+          for (Object value : results) {
+            Map item = (Map) value;
+            String id = String.valueOf(item.get("trackId"));
+            String url = (String) item.get("trackViewUrl");
+            if ("null".equals(id) || url == null || found.containsKey(id)
+                || !"music.apple.com".equals(URI.create(url).getHost()) || !id.equals(extractTrackId(url))) continue;
+            found.put(id, new MatchCandidate(id, cleanAppleUrl(url), (String) item.get("trackName"),
+                (String) item.get("artistName"), (String) item.get("collectionName"),
+                item.get("trackTimeMillis") instanceof Number n ? n.intValue() : null,
+                parseReleaseDate((String) item.get("releaseDate")), (String) item.get("isrc")));
+            if (found.size() >= 20) return new ArrayList<>(found.values());
+          }
+        } catch (Exception e) {
+          log.warn("[Apple] 후보 검색 실패: country={}, error={}", country, e.getClass().getSimpleName());
+        }
+      }
+    }
+    return new ArrayList<>(found.values());
+  }
+
   public PlatformTrack preferKoreanStorefront(PlatformTrack match) {
     if (match == null || "kr".equals(storefront(match.getUrl()))) return match;
     try {
@@ -219,8 +259,50 @@ public class AppleTrackService {
         return new PlatformTrack(match.getTrack(), match.getPlatform(), id, cleanAppleUrl(url),
             (String) item.get("trackName"), (String) item.get("artistName"));
       }
+      return findKoreanRecording(match, id);
     } catch (Exception e) {
       log.warn("[Apple] 한국 스토어 확인 실패: {}", e.getMessage());
+    }
+    return match;
+  }
+
+  private PlatformTrack findKoreanRecording(PlatformTrack match, String id) {
+    Map originalResponse = getAppleResponseAsMap("https://itunes.apple.com/lookup?id=" + id
+        + "&entity=song&country=" + storefront(match.getUrl()), "Failed to read source recording");
+    if (!(originalResponse.get("results") instanceof List originals)) return match;
+    for (Object value : originals) {
+      Map original = (Map) value;
+      if (!id.equals(String.valueOf(original.get("trackId")))
+          || !(original.get("artistId") instanceof Number artistId)
+          || !(original.get("trackTimeMillis") instanceof Number duration)) continue;
+      LocalDate date = parseReleaseDate((String) original.get("releaseDate"));
+      if (date == null || duration.longValue() <= 0) return match;
+      Track probe = new Track(match.getTrack() == null ? match.getTitle() : match.getTrack().getTitle(),
+          (String) original.get("artistName"), null, null);
+      probe.setDurationMs(duration.intValue());
+      probe.setReleaseDate(date);
+      Map response = getAppleResponseAsMap("https://itunes.apple.com/lookup?id=" + artistId
+          + "&entity=song&country=kr&limit=200", "Failed to read Korean artist catalog");
+      if (!(response.get("results") instanceof List candidates)) return match;
+      PlatformTrack verified = null;
+      // ponytail: bounded artist catalog; ambiguous or unlisted recordings retain the original link.
+      for (Object candidate : candidates) {
+        Map item = (Map) candidate;
+        String url = (String) item.get("trackViewUrl");
+        String candidateId = String.valueOf(item.get("trackId"));
+        if (!(item.get("artistId") instanceof Number candidateArtist) || candidateArtist.longValue() != artistId.longValue()
+            || !(item.get("trackTimeMillis") instanceof Number candidateDuration)
+            || candidateDuration.longValue() <= 0 || Math.abs(duration.longValue() - candidateDuration.longValue()) > 2_000L
+            || !date.equals(parseReleaseDate((String) item.get("releaseDate")))
+            || url == null || !"music.apple.com".equals(java.net.URI.create(url).getHost())
+            || !"kr".equals(storefront(url)) || !candidateId.equals(extractTrackId(url))
+            || !TrackMatchVerifier.isEvidenceMatch(probe, (String) item.get("trackName"),
+                probe.getArtist(), candidateDuration.intValue(), date)) continue;
+        if (verified != null && !verified.getPlatformTrackId().equals(candidateId)) return match;
+        verified = new PlatformTrack(match.getTrack(), match.getPlatform(), candidateId, cleanAppleUrl(url),
+            (String) item.get("trackName"), (String) item.get("artistName"));
+      }
+      return verified == null ? match : verified;
     }
     return match;
   }

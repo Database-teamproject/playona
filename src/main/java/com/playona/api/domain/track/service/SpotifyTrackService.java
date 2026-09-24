@@ -16,6 +16,10 @@ import se.michaelthelin.spotify.model_objects.specification.ArtistSimplified;
 
 import java.time.LocalDate;
 import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
@@ -194,6 +198,63 @@ public class SpotifyTrackService {
         }
     }
 
+    List<MatchCandidate> searchCandidates(Track track) {
+        if (track.getTitle() == null || track.getArtist() == null) return List.of();
+        var queries = new LinkedHashSet<String>();
+        if (track.getIsrc() != null) queries.add("isrc:" + track.getIsrc());
+        for (String artist : TrackMatchVerifier.artistNames(track.getArtist())) {
+            for (String title : TrackMatchVerifier.searchTitles(track.getTitle())) {
+                queries.add("track:" + title + " artist:" + artist);
+            }
+        }
+        for (String title : TrackMatchVerifier.searchTitles(track.getTitle())) queries.add("track:" + title);
+        var found = new LinkedHashMap<String, MatchCandidate>();
+        try {
+            for (String query : queries) {
+                var results = authorizedApi().searchTracks(query).limit(10).build().execute();
+                for (var item : results.getItems()) {
+                    if (item.getId() == null || found.containsKey(item.getId())) continue;
+                    String artist = Arrays.stream(item.getArtists()).map(ArtistSimplified::getName)
+                        .collect(Collectors.joining(", "));
+                    LocalDate date = null;
+                    String released = item.getAlbum() == null ? null : item.getAlbum().getReleaseDate();
+                    if (released != null && released.length() >= 10) {
+                        try { date = LocalDate.parse(released.substring(0, 10)); }
+                        catch (Exception ignored) {}
+                    }
+                    String isrc = item.getExternalIds() == null || item.getExternalIds().getExternalIds() == null
+                        ? null : item.getExternalIds().getExternalIds().get("isrc");
+                    found.put(item.getId(), new MatchCandidate(item.getId(),
+                        "https://open.spotify.com/track/" + item.getId(), item.getName(), artist,
+                        item.getAlbum() == null ? null : item.getAlbum().getName(), item.getDurationMs(), date, isrc));
+                    if (found.size() >= 20) return new ArrayList<>(found.values());
+                }
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("Spotify candidate search failed: " + e.getMessage(), e);
+        }
+        return new ArrayList<>(found.values());
+    }
+
+    PlatformTrack firstVerifiedCandidate(Track track, Platform platform, List<MatchCandidate> candidates) {
+        return candidates.stream().filter(candidate -> {
+            if (track.getIsrc() != null && candidate.isrc() != null) {
+                return track.getIsrc().equalsIgnoreCase(candidate.isrc());
+            }
+            return TrackMatchVerifier.isEvidenceMatch(track, candidate.title(), candidate.artist(),
+                candidate.durationMs(), candidate.releaseDate())
+                || TrackMatchVerifier.isKoreanReleaseMatch(track, candidate.title(), candidate.artist(),
+                    candidate.durationMs(), candidate.releaseDate());
+        }).findFirst().map(candidate -> candidate.toPlatformTrack(track, platform)).orElse(null);
+    }
+
+    void rememberIsrc(Track track, MatchCandidate candidate) {
+        if (track.getIsrc() == null && candidate.isrc() != null) {
+            track.setIsrc(candidate.isrc());
+            trackRepository.save(track);
+        }
+    }
+
     private se.michaelthelin.spotify.model_objects.specification.Track findVerifiedMatch(
             Track track, String query) throws Exception {
         var results = authorizedApi().searchTracks(query).limit(5).build().execute();
@@ -217,7 +278,9 @@ public class SpotifyTrackService {
             releaseDate = LocalDate.parse(candidate.getAlbum().getReleaseDate().substring(0, 10));
         }
         return TrackMatchVerifier.isEvidenceMatch(track, candidate.getName(), candidateArtist,
-                candidate.getDurationMs(), releaseDate);
+                candidate.getDurationMs(), releaseDate)
+                || TrackMatchVerifier.isKoreanReleaseMatch(track, candidate.getName(), candidateArtist,
+                    candidate.getDurationMs(), releaseDate);
     }
 
     // "엠씨더맥스 (M.C the MAX)" → "엠씨더맥스", "BTS (방탄소년단)" → "BTS"

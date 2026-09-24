@@ -155,6 +155,36 @@ class KoreanPlatformMatchingTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"flo", "genie", "melon"})
+    void collectsDirectSongCandidatesForAiReview(String slug) {
+        Object service = switch (slug) {
+            case "flo" -> new FloTrackService(mock(TrackRepository.class));
+            case "genie" -> new GenieTrackService(mock(TrackRepository.class));
+            default -> new MelonTrackService(mock(TrackRepository.class));
+        };
+        ReflectionTestUtils.setField(service, "webClient", WebClient.builder().exchangeFunction(request -> {
+            boolean search = request.url().getPath().contains("/search");
+            String body = search ? results(slug, "밤편지", "아이유")
+                : "<meta property=\"og:title\" content=\"밤편지"
+                    + (slug.equals("genie") ? " / 아이유 - genie" : " - 아이유") + "\">";
+            return Mono.just(ClientResponse.create(HttpStatus.OK)
+                .header("Content-Type", slug.equals("flo") ? "application/json" : "text/html")
+                .body(body).build());
+        }).build());
+        Track source = new Track("밤편지", "아이유", null,
+            "https://music.youtube.com/watch?v=example");
+        List<MatchCandidate> candidates = switch (slug) {
+            case "flo" -> ((FloTrackService) service).searchCandidates(source);
+            case "genie" -> ((GenieTrackService) service).searchCandidates(source);
+            default -> ((MelonTrackService) service).searchCandidates(source);
+        };
+        assertEquals(1, candidates.size());
+        assertEquals("123", candidates.get(0).id());
+        assertEquals("밤편지", candidates.get(0).title());
+        assertEquals("아이유", candidates.get(0).artist());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"flo", "genie", "melon"})
     void hidesPreviouslySavedSearchLinksFromResultResponse(String slug) {
         Track track = new Track("밤편지", "아이유", null, "https://music.youtube.com/watch?v=example");
         Platform platform = platform(slug);

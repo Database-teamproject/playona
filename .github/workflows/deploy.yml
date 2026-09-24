@@ -32,6 +32,8 @@ jobs:
             echo "SPOTIFY_CLIENT_ID=${{ secrets.SPOTIFY_CLIENT_ID }}" >> .env
             echo "SPOTIFY_CLIENT_SECRET=${{ secrets.SPOTIFY_CLIENT_SECRET }}" >> .env
             echo "YOUTUBE_API_KEY=${{ secrets.YOUTUBE_API_KEY }}" >> .env
+            echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> .env
+            echo "AI_MATCHING_MODE=off" >> .env
             echo "APP_BASE_URL=${{ secrets.APP_BASE_URL }}" >> .env
             echo "OAUTH2_REDIRECT_URL=${{ secrets.OAUTH2_REDIRECT_URL }}" >> .env
             echo "KAKAO_CLIENT_ID=${{ secrets.KAKAO_CLIENT_ID }}" >> .env

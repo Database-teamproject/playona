@@ -25,6 +25,18 @@ import org.springframework.test.util.ReflectionTestUtils;
 class ServiceFlowTest {
 
   @ParameterizedTest
+  @CsvSource({"kr,Apple Music", "us,Apple Music (미국 스토어)", "jp,Apple Music (일본 스토어)"})
+  void labelsAppleStorefrontWithoutChangingTheUrl(String country, String name) {
+    Platform platform = mock(Platform.class);
+    when(platform.getSlug()).thenReturn("apple");
+    when(platform.getName()).thenReturn("Apple Music");
+    String url = "https://music.apple.com/" + country + "/song/123";
+    PlatformTrack track = new PlatformTrack(null, platform, "123", url, "Song", "Artist");
+    assertEquals(name, track.getDisplayName());
+    assertEquals(url, track.getUrl());
+  }
+
+  @ParameterizedTest
   @CsvSource({"https://open.spotify.com/track/example", "https://music.apple.com/kr/song/7",
       "https://www.melon.com/song/detail.htm?songId=7", "https://www.music-flo.com/detail/track/7/details",
       "https://www.genie.co.kr/detail/songInfo?xgnm=7"})
@@ -108,7 +120,8 @@ class ServiceFlowTest {
     var melon = mock(MelonTrackService.class);
     var flo = mock(FloTrackService.class);
     var genie = mock(GenieTrackService.class);
-    var service = new TrackMatchingService(platforms, matches, spotify, youtube, apple, melon, flo, genie);
+    var service = new TrackMatchingService(platforms, matches, spotify, youtube, apple, melon, flo, genie,
+        mock(AiMatchAdvisor.class));
     Platform platform = new Platform();
     ReflectionTestUtils.setField(platform, "slug", slug);
     Track track = new Track("Morning", "Artist", null, sourceUrl);
@@ -125,5 +138,57 @@ class ServiceFlowTest {
     verifyNoInteractions(spotify, youtube, melon, flo, genie);
     if (slug.equals("apple")) verify(apple, times(2)).preferKoreanStorefront(any());
     else verifyNoInteractions(apple);
+  }
+
+  @org.junit.jupiter.api.Test
+  void keepsExistingMatchWhenRefreshFailsOrFindsNothing() {
+    var platforms = mock(PlatformRepository.class);
+    var matches = mock(PlatformTrackRepository.class);
+    var spotify = mock(SpotifyTrackService.class);
+    var service = new TrackMatchingService(platforms, matches, spotify,
+        mock(YoutubeTrackService.class), mock(AppleTrackService.class),
+        mock(MelonTrackService.class), mock(FloTrackService.class), mock(GenieTrackService.class),
+        mock(AiMatchAdvisor.class));
+    Platform platform = new Platform();
+    ReflectionTestUtils.setField(platform, "slug", "spotify");
+    Track track = new Track("Morning", "Artist", null, "https://music.youtube.com/watch?v=example");
+    PlatformTrack existing = new PlatformTrack(track, platform, "old",
+        "https://open.spotify.com/track/old", "Morning", "Artist");
+    when(platforms.findByIsActiveTrue()).thenReturn(List.of(platform));
+    when(matches.findByTrackAndPlatform(track, platform)).thenReturn(Optional.of(existing));
+
+    service.matchAll(track);
+    when(spotify.searchTrack(track, platform)).thenThrow(new RuntimeException("rate limited"));
+    service.matchAll(track);
+
+    verify(matches, never()).delete(existing);
+    verify(matches, never()).flush();
+  }
+
+  @org.junit.jupiter.api.Test
+  void storesAiSelectedCandidateAndItsVerifiedIsrc() {
+    var platforms = mock(PlatformRepository.class);
+    var matches = mock(PlatformTrackRepository.class);
+    var spotify = mock(SpotifyTrackService.class);
+    var advisor = mock(AiMatchAdvisor.class);
+    var service = new TrackMatchingService(platforms, matches, spotify,
+        mock(YoutubeTrackService.class), mock(AppleTrackService.class),
+        mock(MelonTrackService.class), mock(FloTrackService.class), mock(GenieTrackService.class), advisor);
+    Platform platform = new Platform();
+    ReflectionTestUtils.setField(platform, "slug", "spotify");
+    Track track = new Track("Morning", "Artist", null, "https://music.youtube.com/watch?v=example");
+    MatchCandidate candidate = new MatchCandidate("better", "https://open.spotify.com/track/better",
+        "Morning", "Artist", "Album", 180000, java.time.LocalDate.of(2025, 1, 1), "ISRC1");
+    PlatformTrack selected = candidate.toPlatformTrack(track, platform);
+    when(platforms.findByIsActiveTrue()).thenReturn(List.of(platform));
+    when(advisor.enabled()).thenReturn(true);
+    when(spotify.searchCandidates(track)).thenReturn(List.of(candidate));
+    when(advisor.choose(eq(track), eq(platform), anyList(), isNull())).thenReturn(selected);
+
+    service.matchAll(track);
+
+    verify(matches).save(selected);
+    verify(spotify).rememberIsrc(track, candidate);
+    verify(spotify, never()).searchTrack(any(), any());
   }
 }

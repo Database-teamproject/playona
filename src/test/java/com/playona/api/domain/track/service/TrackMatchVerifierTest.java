@@ -9,6 +9,27 @@ import org.junit.jupiter.api.Test;
 
 class TrackMatchVerifierTest {
   @Test
+  void acceptsLaterKoreanCatalogReleaseWithVerifiedAliasAndExactRuntime() {
+    Track source = track("이별하러 가는 길 (The Way to Say Goodbye)", "임한별 (Onestar)", 307118,
+        LocalDate.of(2018, 9, 13));
+    assertFalse(TrackMatchVerifier.isEvidenceMatch(source, "The Way To Say Goodbye", "Onestar", 307118,
+        LocalDate.of(2019, 4, 11)));
+    assertTrue(TrackMatchVerifier.isKoreanReleaseMatch(source, "The Way To Say Goodbye", "Onestar", 307118,
+        LocalDate.of(2019, 4, 11)));
+    assertFalse(TrackMatchVerifier.isKoreanReleaseMatch(source, "The Way To Say Goodbye (Live)", "Onestar", 307118,
+        LocalDate.of(2019, 4, 11)));
+    assertFalse(TrackMatchVerifier.isKoreanReleaseMatch(source, "The Way To Say Goodbye", "Other Artist", 307118,
+        LocalDate.of(2019, 4, 11)));
+    assertFalse(TrackMatchVerifier.isKoreanReleaseMatch(source, "The Way To Say Goodbye", "Onestar", 310000,
+        LocalDate.of(2019, 4, 11)));
+    assertFalse(TrackMatchVerifier.isKoreanReleaseMatch(source, "The Way To Say Goodbye", "Onestar", 307118,
+        LocalDate.of(2017, 4, 11)));
+    Track japanese = track("アイドル (Idol)", "YOASOBI", 213233, LocalDate.of(2023, 4, 12));
+    assertFalse(TrackMatchVerifier.isKoreanReleaseMatch(japanese, "Idol", "YOASOBI", 213233,
+        LocalDate.of(2023, 5, 26)));
+  }
+
+  @Test
   void separatesWorkCreditsWithoutRemovingRecordingVersions() {
     Track source = track("フィナーレ。 (Finale.)", "eill", 242000, LocalDate.of(2022, 9, 7));
     for (String credit : new String[]{

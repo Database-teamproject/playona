@@ -26,6 +26,7 @@ public class TrackMatchingService {
     private final MelonTrackService melonTrackService;
     private final FloTrackService floTrackService;
     private final GenieTrackService genieTrackService;
+    private final AiMatchAdvisor aiMatchAdvisor;
 
     // REQUIRES_NEW: 호출자(createLink)의 트랜잭션과 독립적으로 실행
     // 플랫폼 매칭 실패 시 createLink 전체가 롤백되는 것을 방지
@@ -56,14 +57,14 @@ public class TrackMatchingService {
                 }
                 continue;
             }
-            existing.ifPresent(platformTrackRepository::delete);
-            if (existing.isPresent()) {
-                platformTrackRepository.flush();
-            }
-
             try {
                 PlatformTrack platformTrack = matchToPlatform(track, platform);
                 if (platformTrack != null) {
+                    if (existing.isPresent()) {
+                        if (java.util.Objects.equals(existing.get().getUrl(), platformTrack.getUrl())) continue;
+                        platformTrackRepository.delete(existing.get());
+                        platformTrackRepository.flush();
+                    }
                     platformTrackRepository.save(platformTrack);
                 }
             } catch (Exception e) {
@@ -93,6 +94,44 @@ public class TrackMatchingService {
             PlatformTrack source = new PlatformTrack(track, platform, null, track.getSourceUrl(), track.getTitle(), track.getArtist());
             return "apple".equals(platform.getSlug()) ? appleTrackService.preferKoreanStorefront(source) : source;
         }
+        if (!aiMatchAdvisor.enabled()) return legacyMatchToPlatform(track, platform);
+        List<MatchCandidate> candidates;
+        try {
+            candidates = switch (platform.getSlug()) {
+                case "spotify" -> spotifyTrackService.searchCandidates(track);
+                case "ytmusic" -> youtubeTrackService.searchCandidates(track);
+                case "apple" -> appleTrackService.searchCandidates(track);
+                case "melon" -> melonTrackService.searchCandidates(track);
+                case "flo" -> floTrackService.searchCandidates(track);
+                case "genie" -> genieTrackService.searchCandidates(track);
+                default -> List.of();
+            };
+        } catch (Exception e) {
+            log.warn("AI 후보 검색 실패 - platform: {}, error: {}", platform.getSlug(), e.getMessage());
+            candidates = List.of();
+        }
+        PlatformTrack baseline;
+        try {
+            baseline = "spotify".equals(platform.getSlug()) && !candidates.isEmpty()
+                ? spotifyTrackService.firstVerifiedCandidate(track, platform, candidates)
+                : legacyMatchToPlatform(track, platform);
+        } catch (Exception e) {
+            log.warn("기본 매칭 실패 - platform: {}, error: {}", platform.getSlug(), e.getMessage());
+            baseline = null;
+        }
+        PlatformTrack chosen = aiMatchAdvisor.choose(track, platform, candidates, baseline);
+        if ("spotify".equals(platform.getSlug()) && chosen != null) {
+            String id = chosen.getPlatformTrackId();
+            candidates.stream().filter(candidate -> candidate.id().equals(id)).findFirst()
+                .ifPresent(candidate -> spotifyTrackService.rememberIsrc(track, candidate));
+        }
+        if ("apple".equals(platform.getSlug()) && chosen != null && chosen != baseline) {
+            return appleTrackService.preferKoreanStorefront(chosen);
+        }
+        return chosen;
+    }
+
+    private PlatformTrack legacyMatchToPlatform(Track track, Platform platform) {
         return switch (platform.getSlug()) {
             case "spotify" -> spotifyTrackService.searchTrack(track, platform);
             case "ytmusic" -> youtubeTrackService.searchTrack(track, platform);

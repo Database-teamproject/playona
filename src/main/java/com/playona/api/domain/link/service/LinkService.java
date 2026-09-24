@@ -124,8 +124,6 @@ public class LinkService {
 
         Track track = link.getTrack();
         if (track.getSourceUrl() != null) track = trackService.findOrCreateTrack(track.getSourceUrl());
-        platformTrackRepository.deleteByTrack(track);
-        platformTrackRepository.flush();
         trackMatchingService.rematchAll(track);
 
         return new LinkResponse(link, baseUrl, platformTrackRepository.findByTrack(track));
@@ -139,7 +137,7 @@ public class LinkService {
             .filter(pt -> !pt.isSearchFallback())
             .map(pt -> Map.of(
                 "slug", pt.getPlatform().getSlug(),
-                "name", pt.getPlatform().getName(),
+                "name", pt.getDisplayName(),
                 "url", pt.getUrl()
             ))
             .toList();

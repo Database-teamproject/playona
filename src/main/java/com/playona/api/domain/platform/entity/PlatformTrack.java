@@ -61,6 +61,21 @@ public class PlatformTrack {
     };
   }
 
+  public String getDisplayName() {
+    if ("apple".equals(platform.getSlug()) && url != null) {
+      var region = java.util.regex.Pattern.compile("^https://music\\.apple\\.com/([a-z]{2})/").matcher(url);
+      if (region.find() && !"kr".equals(region.group(1))) {
+        String country = switch (region.group(1)) {
+          case "us" -> "미국";
+          case "jp" -> "일본";
+          default -> region.group(1).toUpperCase(java.util.Locale.ROOT);
+        };
+        return platform.getName() + " (" + country + " 스토어)";
+      }
+    }
+    return platform.getName();
+  }
+
   @PrePersist
   protected void onCreate() {
     createdAt = LocalDateTime.now();
