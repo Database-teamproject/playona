@@ -59,6 +59,9 @@ public class TrackMatchingService {
             }
             try {
                 PlatformTrack platformTrack = matchToPlatform(track, platform);
+                if (platformTrack == null && existing.isPresent() && "apple".equals(platform.getSlug())) {
+                    platformTrack = appleTrackService.preferKoreanStorefront(existing.get());
+                }
                 if (platformTrack != null) {
                     if (existing.isPresent()) {
                         if (java.util.Objects.equals(existing.get().getUrl(), platformTrack.getUrl())) continue;

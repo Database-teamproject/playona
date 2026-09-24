@@ -166,6 +166,33 @@ class ServiceFlowTest {
   }
 
   @org.junit.jupiter.api.Test
+  void localizesExistingAppleLinkEvenWhenNewSearchFindsNothing() {
+    var platforms = mock(PlatformRepository.class);
+    var matches = mock(PlatformTrackRepository.class);
+    var apple = mock(AppleTrackService.class);
+    var service = new TrackMatchingService(platforms, matches, mock(SpotifyTrackService.class),
+        mock(YoutubeTrackService.class), apple, mock(MelonTrackService.class),
+        mock(FloTrackService.class), mock(GenieTrackService.class), mock(AiMatchAdvisor.class));
+    Platform platform = new Platform();
+    ReflectionTestUtils.setField(platform, "slug", "apple");
+    Track track = new Track("헤어지자 말해요", "박재정", null,
+        "https://music.youtube.com/watch?v=example");
+    PlatformTrack existing = new PlatformTrack(track, platform, "us-id",
+        "https://music.apple.com/us/song/us-id", "Let's Say Goodbye", "Parc Jae Jung");
+    PlatformTrack korean = new PlatformTrack(track, platform, "kr-id",
+        "https://music.apple.com/kr/song/kr-id", "헤어지자 말해요", "박재정");
+    when(platforms.findByIsActiveTrue()).thenReturn(List.of(platform));
+    when(matches.findByTrackAndPlatform(track, platform)).thenReturn(Optional.of(existing));
+    when(apple.preferKoreanStorefront(existing)).thenReturn(korean);
+
+    service.matchAll(track);
+
+    verify(matches).delete(existing);
+    verify(matches).flush();
+    verify(matches).save(korean);
+  }
+
+  @org.junit.jupiter.api.Test
   void storesAiSelectedCandidateAndItsVerifiedIsrc() {
     var platforms = mock(PlatformRepository.class);
     var matches = mock(PlatformTrackRepository.class);
