@@ -82,64 +82,38 @@ Swagger UI: `http://localhost:8080/swagger-ui/index.html`
 
 ---
 
-## 로컬 실행
+## 로컬 테스트
 
-### 사전 요구사항
-- Java 21
-- Docker & Docker Compose
+Java 21과 Docker Desktop(Docker Compose 포함)이 필요합니다. 다른 사람의 키를 공유하지 말고 각자의 [Spotify 앱](https://developer.spotify.com/dashboard)과 [YouTube Data API v3](https://console.cloud.google.com/apis/library/youtube.googleapis.com) 키를 준비하세요.
 
-### 환경변수
-
-`.env` 파일을 프로젝트 루트에 생성:
-
-```env
-DB_PASSWORD=yourpassword
-JWT_SECRET=your-32-char-random-secret-key-here
-
-SPOTIFY_CLIENT_ID=
-SPOTIFY_CLIENT_SECRET=
-
-YOUTUBE_API_KEY=
-
-GOOGLE_CLIENT_ID=
-GOOGLE_CLIENT_SECRET=
-GOOGLE_REDIRECT_URI=http://localhost:8080/login/oauth2/code/google
-
-KAKAO_CLIENT_ID=
-KAKAO_CLIENT_SECRET=
-
-APP_BASE_URL=http://localhost:3000
-OAUTH2_REDIRECT_URL=http://localhost:3000/auth/callback
-
-AWS_ACCESS_KEY_ID=
-AWS_SECRET_ACCESS_KEY=
-AWS_S3_BUCKET=
-```
-
-### 실행
+처음 받는 경우 `dev` 브랜치를 내려받고, 프로젝트 루트에서 예시 파일을 복사합니다.
 
 ```bash
-# Docker Desktop을 켠 뒤 로컬 전용 DB 실행 (127.0.0.1:15432)
-docker compose -f compose.local.yml up -d --wait
-
-# .env와 KEY.env의 음악 API 키를 읽고 로컬 서버 실행
-./gradlew bootRun --args='--spring.profiles.active=local'
-
-# 종료: 서버 터미널에서 Ctrl+C, DB는 아래 명령으로 중지 (데이터 유지)
-docker compose -f compose.local.yml stop
+git clone --branch dev https://github.com/Database-teamproject/playona.git
+cd playona
+cp .env.example .env
 ```
 
-브라우저에서 **http://localhost:8080/local**에 접속해 음악 URL을 입력하면
-곡 제목·가수·플랫폼 링크·API 원문을 확인할 수 있습니다. 별도 프론트엔드 없이 동작합니다.
-이 페이지는 `local` 프로필에서만 제공됩니다. 프론트엔드를 별도로 실행한다면
-`http://localhost:3000`에서 API 서버 `http://localhost:8080`으로 연결하세요.
+`.env`에서 `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `YOUTUBE_API_KEY`를 자신의 값으로 바꾸세요. `/local` 테스트에는 OAuth, AWS, OpenAI 키가 필요하지 않습니다. `.env`는 Git과 Docker 빌드에서 제외됩니다.
 
-로컬 DB는 `playona-local` Compose 프로젝트의 별도 볼륨을 사용합니다.
-음악 검색은 실제 외부 API를 호출하므로 `.env`에 유효한 YouTube·Spotify 키가 필요합니다.
-기존 `KEY.env`가 있으면 함께 읽으며, 중복 키는 `KEY.env` 값이 우선합니다. 두 파일 모두 커밋하지 않습니다.
-소셜 로그인과 프로필 업로드는 이 매칭 테스트 페이지의 범위에 포함하지 않습니다.
+Docker Desktop을 켜고 터미널 두 개에서 각각 실행합니다.
 
-Java 코드 수정 후에는 `bootRun`을 종료하고 다시 실행하면 변경사항이 반영됩니다.
+```bash
+# 첫 번째 터미널: 로컬 전용 DB 실행
+docker compose -f compose.local.yml up -d --wait
+```
+
+```bash
+# 두 번째 터미널: 로컬 API 실행
+./gradlew bootRun --args='--spring.profiles.active=local'
+```
+
+브라우저에서 **http://localhost:8080/local**을 열고 음악 URL을 입력하세요. 곡 제목·가수·플랫폼 링크·API 원문을 확인할 수 있으며 별도 프론트엔드는 필요하지 않습니다. 이 페이지는 `local` 프로필에서만 제공됩니다.
+
+로컬 DB는 운영 DB와 분리된 `playona-local` 볼륨을 사용합니다. 음악 검색은 실제 외부 API를 호출하므로 유효한 키가 필요합니다. 기존에 개인 `KEY.env`가 있다면 함께 읽으며, 중복 키는 `KEY.env` 값이 우선합니다. 두 파일 모두 커밋하지 마세요.
+
+종료할 때는 API 터미널에서 `Ctrl+C`를 누른 뒤 `docker compose -f compose.local.yml stop`을 실행하세요. DB 데이터는 유지됩니다. Java 코드 수정 후에는 API를 다시 실행해야 합니다.
+
 수정 → 관련 테스트 → localhost 확인 순으로 검증하고, 배포 요청이 있을 때만 배포합니다.
 `docker-compose.yml`은 운영 설정이므로 로컬 테스트에는 사용하지 않습니다.
 
